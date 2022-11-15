@@ -299,7 +299,7 @@ CPU:
             { 0xFD, (c) => c.a = c.Sub(c.a, Mode.ABSX) },
             { 0xF9, (c) => c.a = c.Sub(c.a, Mode.ABSY) },
 
-            // Cmp
+            // CMP
             { 0xC9, (c) => c.Cmp(c.a, Mode.IMM) },
             { 0xC5, (c) => c.Cmp(c.a, Mode.ZP) },
             { 0xD5, (c) => c.Cmp(c.a, Mode.ZPX) },
@@ -308,6 +308,64 @@ CPU:
             { 0xCD, (c) => c.Cmp(c.a, Mode.ABS) },
             { 0xDD, (c) => c.Cmp(c.a, Mode.ABSX) },
             { 0xD9, (c) => c.Cmp(c.a, Mode.ABSY) },
+
+            // CPX
+            { 0xE0, (c) => c.Cmp(c.x, Mode.IMM) },
+            { 0xE4, (c) => c.Cmp(c.x, Mode.ZP) },
+            { 0xEC, (c) => c.Cmp(c.x, Mode.ABS) },
+
+            // CPY
+            { 0xC0, (c) => c.Cmp(c.y, Mode.IMM) },
+            { 0xC4, (c) => c.Cmp(c.y, Mode.ZP) },
+            { 0xCC, (c) => c.Cmp(c.y, Mode.ABS) },
+
+            // DEC
+            { 0xC6, (c) => c.DecAddr(Mode.ZP) },
+            { 0xD6, (c) => c.DecAddr(Mode.ZPX) },
+            { 0xCE, (c) => c.DecAddr(Mode.ABS) },
+            { 0xDE, (c) => c.DecAddr(Mode.ABSX) },
+
+            // DEX, DEY
+            { 0xCA, (c) => c.x = c.Dec(c.x) },
+            { 0x88, (c) => c.y = c.Dec(c.y) },
+
+            // INC
+            { 0xE6, (c) => c.IncAddr(Mode.ZP) },
+            { 0xF6, (c) => c.IncAddr(Mode.ZPX) },
+            { 0xEE, (c) => c.IncAddr(Mode.ABS) },
+            { 0xFE, (c) => c.IncAddr(Mode.ABSX) },
+
+            // INX, INY
+            { 0xE8, (c) => c.x = c.Inc(c.x) },
+            { 0xC8, (c) => c.y = c.Inc(c.y) },
+
+            // ASL
+            { 0x0A, (c) => c.a = c.Asl(c.a) },
+            { 0x06, (c) => c.AslAddr(Mode.ZP) },
+            { 0x16, (c) => c.AslAddr(Mode.ZPX) },
+            { 0x0E, (c) => c.AslAddr(Mode.ABS) },
+            { 0x1E, (c) => c.AslAddr(Mode.ABSX) },
+
+            // ROL
+            { 0x2A, (c) => c.a = c.Rol(c.a) },
+            { 0x26, (c) => c.RolAddr(Mode.ZP) },
+            { 0x36, (c) => c.RolAddr(Mode.ZPX) },
+            { 0x2E, (c) => c.RolAddr(Mode.ABS) },
+            { 0x3E, (c) => c.RolAddr(Mode.ABSX) },
+
+            // LSR
+            { 0x4A, (c) => c.a = c.Lsr(c.a) },
+            { 0x46, (c) => c.LsrAddr(Mode.ZP) },
+            { 0x56, (c) => c.LsrAddr(Mode.ZPX) },
+            { 0x4E, (c) => c.LsrAddr(Mode.ABS) },
+            { 0x5E, (c) => c.LsrAddr(Mode.ABSX) },
+
+            // ROR
+            { 0x6A, (c) => c.a = c.Ror(c.a) },
+            { 0x66, (c) => c.RorAddr(Mode.ZP) },
+            { 0x76, (c) => c.RorAddr(Mode.ZPX) },
+            { 0x6E, (c) => c.RorAddr(Mode.ABS) },
+            { 0x7E, (c) => c.RorAddr(Mode.ABSX) },
         };
 
         internal ushort GetAddress(Mode mode, bool watchPageBoundary)
@@ -405,17 +463,45 @@ CPU:
             status.Zero     = value == 0;
         }
 
+        private void AddArthClockTime(Mode mode)
+        {
+            // https://www.nesdev.org/wiki/6502_cycle_times
+            clock += mode switch
+            {
+                Mode.IMM => 2,
+                Mode.ZP => 3,
+                Mode.ZPX or Mode.ABS or Mode.ABSX or Mode.ABSY => 4,
+                Mode.INDY => 5,
+                Mode.INDX => 6,
+                _ => throw new Exception("Invalid opcode"),
+            };
+        }
+
+        private void AddShiftClockTime(Mode mode)
+        {
+            // DEC, ROL, ROR, LSR, ASL
+            clock += mode switch
+            {
+                Mode.ZP => 5,
+                Mode.ZPX or Mode.ABS => 6,
+                Mode.ABSX => 7,
+                _ => throw new Exception("Invalid opcode"),
+            };
+        }
+
         private byte Or(byte value, Mode mode)
         {
-            clock += 2;
-            byte ret = (byte)(value | ReadNext(mode));
+            AddArthClockTime(mode);
+
+            byte ret = (byte)(value | ReadNext(mode, true));
             SetNegativeAndZero(ret);
             return ret;
         }
 
         private byte Xor(byte value, Mode mode)
         {
-            clock += 2;
+            AddArthClockTime(mode);
+
             byte ret = (byte)(value ^ ReadNext(mode));
             SetNegativeAndZero(ret);
             return ret;
@@ -423,42 +509,173 @@ CPU:
 
         private byte And(byte value, Mode mode)
         {
-            clock += 2;
+            AddArthClockTime(mode);
+
             byte ret = (byte)(value & ReadNext(mode));
             SetNegativeAndZero(ret);
             return ret;
         }
 
-        private byte Add(byte value, Mode mode)
+        private byte Add(byte input, Mode mode)
         {
-            clock += 2;
-            byte add = ReadNext(mode);
+            AddArthClockTime(mode);
 
-            if (value + add > 255)
-            {
-                status.Overflow = true;
-                status.Carry = true;
-            }
+            byte operand = ReadNext(mode);
 
-            byte ret = (byte)(value + add);
+            int result = (sbyte)input + (sbyte)operand + (sbyte)(status.Carry ? 1 : 0);
+
+            status.Overflow = result < -128 || result > 127;
+            status.Carry = (input + operand + (status.Carry ? 1 : 0)) > 0xFF;
+
+            byte ret = (byte)(result & 0xFF);
             SetNegativeAndZero(ret);
             return ret;
         }
 
         private byte Sub(byte value, Mode mode)
         {
-            clock += 2;
-            byte ret = (byte)(value - ReadNext(mode));
-            SetNegativeAndZero(ret);
+            return Add((byte)~value, mode);
+        }
+
+        private void Cmp(byte value, Mode mode)
+        {
+            AddArthClockTime(mode);
+
+            long res = value - ReadNext(mode);
+            status.Negative = (value & 0x80) == 0x80;
+            status.Zero = value == 0;
+            status.Carry = res >= 0;
+        }
+
+        private byte Dec(byte value)
+        {
+            pc++;
+            byte ret = (byte)(value - 1);
+            SetNegativeAndZero(value);
             return ret;
         }
 
-        private byte Cmp(byte value, Mode mode)
+        private void DecAddr(Mode mode)
         {
-            clock += 2;
-            byte ret = (value == ReadNext(mode)) ? (byte)1 : (byte)0;
-            SetNegativeAndZero(ret);
+            AddShiftClockTime(mode);
+
+            var addr = GetAddress(mode, false);
+
+            var value = system.memory.Read(addr);
+            value--;
+            SetNegativeAndZero(value);
+
+            system.memory.Write(addr, value);
+        }
+        private byte Inc(byte value)
+        {
+            pc++;
+            byte ret = (byte)(value + 1);
+            SetNegativeAndZero(value);
             return ret;
+        }
+
+        private void IncAddr(Mode mode)
+        {
+            AddShiftClockTime(mode);
+
+            var addr = GetAddress(mode, false);
+
+            var value = system.memory.Read(addr);
+            value++;
+            SetNegativeAndZero(value);
+
+            system.memory.Write(addr, value);
+        }
+
+        private byte Asl(byte value)
+        {
+            pc++;
+            status.Carry = (value & 0x80) == 0x80;
+            byte ret = (byte)(value << 1);
+            SetNegativeAndZero(value);
+            return ret;
+        }
+
+        private void AslAddr(Mode mode)
+        {
+            AddShiftClockTime(mode);
+
+            var addr = GetAddress(mode, false);
+
+            var value = system.memory.Read(addr);
+            status.Carry = (value & 0x80) == 0x80;
+            value = (byte)(value << 1);
+            SetNegativeAndZero(value);
+
+            system.memory.Write(addr, value);
+        }
+
+        private byte Lsr(byte value)
+        {
+            pc++;
+            status.Carry = (value & 0x1) == 0x1;
+            byte ret = (byte)(value >> 1);
+            SetNegativeAndZero(value);
+            return ret;
+        }
+
+        private void LsrAddr(Mode mode)
+        {
+            AddShiftClockTime(mode);
+
+            var addr = GetAddress(mode, false);
+            var value = system.memory.Read(addr);
+            status.Carry = (value & 0x1) == 0x1;
+            value = (byte)(value >> 1);
+            SetNegativeAndZero(value);
+
+            system.memory.Write(addr, value);
+        }
+
+        private byte Rol(byte value)
+        {
+            pc++;
+            status.Carry = (value & 0x80) == 0x80;
+            byte ret = (byte)((value << 1) + (status.Carry ? 1 : 0));
+            SetNegativeAndZero(value);
+            return ret;
+        }
+
+        private void RolAddr(Mode mode)
+        {
+            AddShiftClockTime(mode);
+
+            var addr = GetAddress(mode, false);
+
+            var value = system.memory.Read(addr);
+            status.Carry = (value & 0x80) == 0x80;
+            value = (byte)((value << 1) + (status.Carry ? 1 : 0));
+            SetNegativeAndZero(value);
+
+            system.memory.Write(addr, value);
+        }
+
+        private byte Ror(byte value)
+        {
+            pc++;
+            status.Carry = (value & 0x1) == 0x1;
+            byte ret = (byte)((value >> 1) + (status.Carry ? 0x80 : 0));
+            SetNegativeAndZero(value);
+            return ret;
+        }
+
+        private void RorAddr(Mode mode)
+        {
+            AddShiftClockTime(mode);
+
+            var addr = GetAddress(mode, false);
+            var value = system.memory.Read(addr);
+            status.Carry = (value & 0x1) == 0x1;
+            value = (byte)((value >> 1) + (status.Carry ? 0x80 : 0));
+            SetNegativeAndZero(value);
+
+            system.memory.Write(addr, value);
         }
 
         private void NOP()
