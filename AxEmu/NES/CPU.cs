@@ -1,0 +1,739 @@
+﻿namespace AxEmu.NES
+{
+    internal class CPU
+    {
+        // https://www.nesdev.org/wiki/CPU
+
+        private System system;
+
+        // Interrupt vector addresses
+        public const ushort NMI_VECTOR = 0xFFFA;   // NMI vector word address
+        public const ushort RESET_VECTOR = 0xFFFC; // Reset vector word address
+        public const ushort IRQ_VECTOR = 0xFFFE;   // IRQ vector word address
+
+        internal struct StatusRegister
+        {
+            internal bool Carry            = false;
+            internal bool Zero             = false;
+            internal bool InterruptDisable = true;
+            internal bool Decimal          = false;
+            internal bool Overflow         = false;
+            internal bool Negative         = false;
+            internal bool Break            = false;
+
+            public StatusRegister()
+            {
+            }
+
+            public void Set(byte inp, bool setBreak = false)
+            {
+                Carry            = (inp & 0x1) == 0x1;
+                Zero             = (inp & 0x2) == 0x2;
+                InterruptDisable = (inp & 0x4) == 0x4;
+                Decimal          = (inp & 0x8) == 0x8;
+                Overflow         = (inp & 0x40) == 0x40;
+                Negative         = (inp & 0x80) == 0x80;
+
+                if (setBreak)
+                    Break = (inp & 0x10) == 0x10;
+            }
+
+            public byte AsByte()
+            {
+                byte r = 0;
+
+                r |= (byte)(Carry ? 0x1 : 0);
+                r |= (byte)(Zero ? 0x2 : 0);
+                r |= (byte)(InterruptDisable ? 0x4 : 0);
+                r |= (byte)(Decimal ? 0x8 : 0);
+                r |= (byte)(Break ? 0x10 : 0);
+                r |= 0x20;
+                r |= (byte)(Overflow ? 0x40 : 0);
+                r |= (byte)(Negative ? 0x80 : 0);
+
+                return r;
+            }
+
+
+            public override string ToString()
+            {
+                return $@"
+    Flags:
+        carry    : {Carry}
+        zero     : {Zero}
+        id       : {InterruptDisable}
+        decimal  : {Decimal}
+        break    : {Break}
+        overflow : {Overflow}
+        negative : {Negative}
+";
+            }
+        }
+
+        // Registers
+        internal byte a;    // Accumulator
+        internal byte x;    // Index X
+        internal byte y;    // Index Y
+        internal byte sp;   // stack pointer
+        internal ushort pc; // program counter
+        internal StatusRegister status; // p
+
+        // Clock
+        internal ulong clock = 0;
+
+        private void SetInitialState()
+        {
+            a = 0;
+            y = 0;
+            x = 0;
+            sp = 0xFD;
+            status = new();
+
+            // pc set on Init
+        }
+
+        internal void Init()
+        {
+            SetInitialState();
+            pc = system.memory.ReadWord(RESET_VECTOR);
+        }
+
+        public CPU(System system)
+        {
+            this.system = system;
+        }
+
+        public override string ToString()
+        {
+            return
+                $@"
+CPU:
+    a  : 0x{a:X}
+    x  : 0x{x:X}
+    y  : 0x{y:X}
+    s  : 0x{sp:X}
+    pc : 0x{pc:X}
+    {status}
+";
+        }
+
+        public void Iterate()
+        {
+            byte op = system.memory.Read(pc);
+
+            if (opCodeActions.TryGetValue(op, out var opAction))
+                opAction(this);
+            else
+                throw new NotImplementedException($"Opcode not supported: {op}");
+        }
+
+        #region Op Codes
+
+        // http://www.oxyron.de/html/opcodes02.html
+        internal enum Mode
+        {
+            IMP,
+            IMM,
+            ZP,
+            ZPX,
+            ZPY,
+            INDX,
+            INDY,
+            ABS,
+            ABSX,
+            ABSY,
+            IND,
+            REL
+        }
+
+        private readonly Dictionary<ushort, Action<CPU>> opCodeActions = new()
+        {
+            //
+            // MOVE
+            //
+
+            // LDA
+            { 0xA9, (c) => c.a = c.Load(Mode.IMM) },
+            { 0xA5, (c) => c.a = c.Load(Mode.ZP) },
+            { 0xB5, (c) => c.a = c.Load(Mode.ZPX) },
+            { 0xA1, (c) => c.a = c.Load(Mode.INDX) },
+            { 0xB1, (c) => c.a = c.Load(Mode.INDY) },
+            { 0xAD, (c) => c.a = c.Load(Mode.ABS) },
+            { 0xBD, (c) => c.a = c.Load(Mode.ABSX) },
+            { 0xB9, (c) => c.a = c.Load(Mode.ABSY) },
+
+            // LDX
+            { 0xA2, (c) => c.x = c.Load(Mode.IMM) },
+            { 0xA6, (c) => c.x = c.Load(Mode.ZP) },
+            { 0xB6, (c) => c.x = c.Load(Mode.ZPY) },
+            { 0xAE, (c) => c.x = c.Load(Mode.ABS) },
+            { 0xBE, (c) => c.x = c.Load(Mode.ABSY) },
+
+            // LDY
+            { 0xA0, (c) => c.y = c.Load(Mode.IMM) },
+            { 0xA4, (c) => c.y = c.Load(Mode.ZP) },
+            { 0xB4, (c) => c.y = c.Load(Mode.ZPX) },
+            { 0xAC, (c) => c.y = c.Load(Mode.ABS) },
+            { 0xBC, (c) => c.y = c.Load(Mode.ABSX) },
+
+            // STA
+            { 0x85, (c) => c.Store(c.a, Mode.ZP) },
+            { 0x95, (c) => c.Store(c.a, Mode.ZPX) },
+            { 0x81, (c) => c.Store(c.a, Mode.INDX) },
+            { 0x91, (c) => c.Store(c.a, Mode.INDY) },
+            { 0x8D, (c) => c.Store(c.a, Mode.ABS) },
+            { 0x9D, (c) => c.Store(c.a, Mode.ABSX) },
+            { 0x99, (c) => c.Store(c.a, Mode.ABSY) },
+
+            // STX
+            { 0x86, (c) => c.Store(c.x, Mode.ZP) },
+            { 0x96, (c) => c.Store(c.x, Mode.ZPY) },
+            { 0x8E, (c) => c.Store(c.x, Mode.ABS) },
+
+            // STY
+            { 0x84, (c) => c.Store(c.y, Mode.ZP) },
+            { 0x94, (c) => c.Store(c.y, Mode.ZPX) },
+            { 0x8C, (c) => c.Store(c.y, Mode.ABS) },
+
+            // Transfers
+            { 0xAA, (c) => c.TAX() },
+            { 0x8A, (c) => c.TXA() },
+            { 0xA8, (c) => c.TAY() },
+            { 0x98, (c) => c.TYA() },
+            { 0xBA, (c) => c.TSX() },
+            { 0x9A, (c) => c.TXS() },
+
+            // Stack
+            { 0x68, (c) => c.PLA() },
+            { 0x48, (c) => c.PHA() },
+            { 0x28, (c) => c.PLP() },
+            { 0x08, (c) => c.PHP() },
+
+            //
+            // JUMP/FLAG
+            //
+
+            // Branch
+            { 0x10, (c) => c.Branch(!c.status.Negative) }, // BPL
+            { 0x30, (c) => c.Branch( c.status.Negative) }, // BMI
+            { 0x50, (c) => c.Branch(!c.status.Overflow) }, // BVC
+            { 0x70, (c) => c.Branch( c.status.Overflow) }, // BVS
+            { 0x90, (c) => c.Branch(!c.status.Carry) },    // BCC
+            { 0xB0, (c) => c.Branch( c.status.Carry) },    // BCS
+            { 0xD0, (c) => c.Branch(!c.status.Zero) },     // BNE
+            { 0xF0, (c) => c.Branch( c.status.Zero) },     // BEQ
+
+            // Interrupts
+            { 0x00, (c) => c.BRK() },
+            { 0x20, (c) => c.JSR() },
+            { 0x40, (c) => c.RTI() },
+            { 0x60, (c) => c.RTS() },
+
+            // Jumps
+            { 0x4C, (c) => c.Jump(Mode.ZP) },
+            { 0x6C, (c) => c.Jump(Mode.IND) },
+
+            // Flag Stuff
+            { 0xEA, (c) => c.NOP() },
+            { 0x24, (c) => c.TestBit(Mode.ZP) },  // BIT ZP
+            { 0x2C, (c) => c.TestBit(Mode.ABS) }, // BIT ABS
+            { 0x18, (c) => { c.NOP(); c.status.Carry = false; } },            // CLC
+            { 0x38, (c) => { c.NOP(); c.status.Carry = true; } },             // SEC
+            { 0xD8, (c) => { c.NOP(); c.status.Decimal = false; } },          // CLD
+            { 0xF8, (c) => { c.NOP(); c.status.Decimal = true; } },           // SED
+            { 0x58, (c) => { c.NOP(); c.status.InterruptDisable = false; } }, // CLI
+            { 0x78, (c) => { c.NOP(); c.status.InterruptDisable = true; } },  // SEI
+            { 0xB8, (c) => { c.NOP(); c.status.Overflow = false; } },         // CLV
+
+            //
+            // Logic & Math
+            //
+
+            // ORA
+            { 0x09, (c) => c.a = c.Or(c.a, Mode.IMM) },
+            { 0x05, (c) => c.a = c.Or(c.a, Mode.ZP) },
+            { 0x15, (c) => c.a = c.Or(c.a, Mode.ZPX) },
+            { 0x01, (c) => c.a = c.Or(c.a, Mode.INDX) },
+            { 0x11, (c) => c.a = c.Or(c.a, Mode.INDY) },
+            { 0x0D, (c) => c.a = c.Or(c.a, Mode.ABS) },
+            { 0x1D, (c) => c.a = c.Or(c.a, Mode.ABSX) },
+            { 0x19, (c) => c.a = c.Or(c.a, Mode.ABSY) },
+
+            // AND
+            { 0x29, (c) => c.a = c.And(c.a, Mode.IMM) },
+            { 0x25, (c) => c.a = c.And(c.a, Mode.ZP) },
+            { 0x35, (c) => c.a = c.And(c.a, Mode.ZPX) },
+            { 0x21, (c) => c.a = c.And(c.a, Mode.INDX) },
+            { 0x31, (c) => c.a = c.And(c.a, Mode.INDY) },
+            { 0x2D, (c) => c.a = c.And(c.a, Mode.ABS) },
+            { 0x3D, (c) => c.a = c.And(c.a, Mode.ABSX) },
+            { 0x39, (c) => c.a = c.And(c.a, Mode.ABSY) },
+
+            // EOR
+            { 0x49, (c) => c.a = c.Xor(c.a, Mode.IMM) },
+            { 0x45, (c) => c.a = c.Xor(c.a, Mode.ZP) },
+            { 0x55, (c) => c.a = c.Xor(c.a, Mode.ZPX) },
+            { 0x41, (c) => c.a = c.Xor(c.a, Mode.INDX) },
+            { 0x51, (c) => c.a = c.Xor(c.a, Mode.INDY) },
+            { 0x4D, (c) => c.a = c.Xor(c.a, Mode.ABS) },
+            { 0x5D, (c) => c.a = c.Xor(c.a, Mode.ABSX) },
+            { 0x59, (c) => c.a = c.Xor(c.a, Mode.ABSY) },
+
+            // ADC
+            { 0x69, (c) => c.a = c.Add(c.a, Mode.IMM) },
+            { 0x65, (c) => c.a = c.Add(c.a, Mode.ZP) },
+            { 0x75, (c) => c.a = c.Add(c.a, Mode.ZPX) },
+            { 0x61, (c) => c.a = c.Add(c.a, Mode.INDX) },
+            { 0x71, (c) => c.a = c.Add(c.a, Mode.INDY) },
+            { 0x6D, (c) => c.a = c.Add(c.a, Mode.ABS) },
+            { 0x7D, (c) => c.a = c.Add(c.a, Mode.ABSX) },
+            { 0x79, (c) => c.a = c.Add(c.a, Mode.ABSY) },
+
+            // SBC
+            { 0xE9, (c) => c.a = c.Sub(c.a, Mode.IMM) },
+            { 0xE5, (c) => c.a = c.Sub(c.a, Mode.ZP) },
+            { 0xF5, (c) => c.a = c.Sub(c.a, Mode.ZPX) },
+            { 0xE1, (c) => c.a = c.Sub(c.a, Mode.INDX) },
+            { 0xF1, (c) => c.a = c.Sub(c.a, Mode.INDY) },
+            { 0xED, (c) => c.a = c.Sub(c.a, Mode.ABS) },
+            { 0xFD, (c) => c.a = c.Sub(c.a, Mode.ABSX) },
+            { 0xF9, (c) => c.a = c.Sub(c.a, Mode.ABSY) },
+
+            // Cmp
+            { 0xC9, (c) => c.Cmp(c.a, Mode.IMM) },
+            { 0xC5, (c) => c.Cmp(c.a, Mode.ZP) },
+            { 0xD5, (c) => c.Cmp(c.a, Mode.ZPX) },
+            { 0xC1, (c) => c.Cmp(c.a, Mode.INDX) },
+            { 0xD1, (c) => c.Cmp(c.a, Mode.INDY) },
+            { 0xCD, (c) => c.Cmp(c.a, Mode.ABS) },
+            { 0xDD, (c) => c.Cmp(c.a, Mode.ABSX) },
+            { 0xD9, (c) => c.Cmp(c.a, Mode.ABSY) },
+        };
+
+        internal ushort GetAddress(Mode mode, bool watchPageBoundary)
+        {
+            ushort addr = 0;
+            int page = 0;
+            int newpage = 0;
+
+            ushort argument = (ushort)(pc + 1);
+
+            switch (mode)
+            {
+                case Mode.IMM:
+                    pc += 2;
+                    return argument;
+                case Mode.ZP:
+                    pc += 2;
+                    addr = system.memory.Read(argument);
+                    return addr;
+                case Mode.ZPX:
+                    pc += 2;
+                    return (ushort)(system.memory.Read(argument) + x);
+                case Mode.ZPY:
+                    pc += 2;
+                    return (ushort)(system.memory.Read(argument) + y);
+                case Mode.ABS:
+                    pc += 3;
+                    return system.memory.ReadWord(argument);
+                case Mode.ABSX:
+                    pc += 3;
+                    addr = system.memory.ReadWord(argument);
+
+                    page = addr >> 2;
+                    addr += x;
+                    newpage = addr >> 2;
+
+                    if (watchPageBoundary && page != newpage)
+                        clock++;
+
+                    return addr;
+                case Mode.ABSY:
+                    pc += 3;
+
+                    addr = system.memory.ReadWord(argument);
+
+                    page = addr >> 2;
+                    addr += y;
+                    newpage = addr >> 2;
+
+                    if (watchPageBoundary && page != newpage)
+                        clock++;
+
+                    return addr;
+                case Mode.INDX:
+                    pc += 2;
+
+                    addr = (ushort)(system.memory.Read(argument) + x);
+                    return system.memory.ReadWord((ushort)(addr & 0xFF));
+                case Mode.INDY:
+                    pc += 2;
+
+                    addr = system.memory.Read(argument);
+                    addr = system.memory.ReadWord((ushort)(addr & 0xFF));
+
+                    page = addr >> 2;
+                    addr += y;
+                    newpage = addr >> 2;
+
+                    if (watchPageBoundary && page != newpage)
+                        clock++;
+
+                    return addr;
+                case Mode.IMP:
+                case Mode.IND:
+                case Mode.REL:
+                    throw new NotImplementedException("TODO!");
+                default:
+                    throw new Exception("Unknown Address Mode");
+            }
+        }
+
+        internal byte ReadNext(Mode mode, bool watchPageBoundary = false)
+        {
+            return system.memory.Read(GetAddress(mode, watchPageBoundary));
+        }
+
+        internal void WriteNext(Mode mode, byte value, bool watchPageBoundary = false)
+        {
+            system.memory.Write(GetAddress(mode, watchPageBoundary), value);
+        }
+
+        private void SetNegativeAndZero(byte value)
+        {
+            status.Negative = (value & 0x80) == 0x80;
+            status.Zero     = value == 0;
+        }
+
+        private byte Or(byte value, Mode mode)
+        {
+            clock += 2;
+            byte ret = (byte)(value | ReadNext(mode));
+            SetNegativeAndZero(ret);
+            return ret;
+        }
+
+        private byte Xor(byte value, Mode mode)
+        {
+            clock += 2;
+            byte ret = (byte)(value ^ ReadNext(mode));
+            SetNegativeAndZero(ret);
+            return ret;
+        }
+
+        private byte And(byte value, Mode mode)
+        {
+            clock += 2;
+            byte ret = (byte)(value & ReadNext(mode));
+            SetNegativeAndZero(ret);
+            return ret;
+        }
+
+        private byte Add(byte value, Mode mode)
+        {
+            clock += 2;
+            byte add = ReadNext(mode);
+
+            if (value + add > 255)
+            {
+                status.Overflow = true;
+                status.Carry = true;
+            }
+
+            byte ret = (byte)(value + add);
+            SetNegativeAndZero(ret);
+            return ret;
+        }
+
+        private byte Sub(byte value, Mode mode)
+        {
+            clock += 2;
+            byte ret = (byte)(value - ReadNext(mode));
+            SetNegativeAndZero(ret);
+            return ret;
+        }
+
+        private byte Cmp(byte value, Mode mode)
+        {
+            clock += 2;
+            byte ret = (value == ReadNext(mode)) ? (byte)1 : (byte)0;
+            SetNegativeAndZero(ret);
+            return ret;
+        }
+
+        private void NOP()
+        {
+            pc++;
+            clock += 2;
+        }
+
+        private void TestBit(Mode mode)
+        {
+            ushort addr = 0;
+            ushort argument = (ushort)(pc + 1);
+            byte value;
+
+            switch (mode)
+            {
+                case Mode.ZP:
+                    clock += 3;
+                    addr = system.memory.Read(argument);
+                    value = system.memory.Read(addr);
+                    pc += 2;
+                    break;
+                case Mode.ABS:
+                    clock += 4;
+                    addr = system.memory.ReadWord(argument);
+                    value = system.memory.Read(addr);
+                    pc += 3;
+                    break;
+                default:
+                    throw new Exception("Invalid BIT");
+            }
+
+            status.Zero     = (value & a)    == 0;
+            status.Negative = (value & 0x80) == 0x80;
+            status.Overflow = (value & 0x40) == 0x40;
+        }
+
+        private void Jump(Mode mode)
+        {
+            ushort addr = 0;
+            ushort argument = (ushort)(pc + 1);
+
+            switch(mode)
+            {
+                case Mode.ZP:
+                    clock += 3;
+                    addr = system.memory.ReadWord(argument);
+                    pc = addr;
+                    break;
+                case Mode.IND:
+                    clock += 5;
+                    addr = system.memory.ReadWord(argument);
+                    addr = system.memory.ReadWord(addr);
+                    pc = addr;
+                    break;
+                default:
+                    throw new Exception("Invalid JMP");
+            }
+        }
+
+        private void BRK()
+        {
+            clock += 7;
+
+            PushStatus();
+            pc = system.memory.ReadWord(0xFFFE);
+            status.InterruptDisable = true;
+        }
+
+        private void RTI()
+        {
+            clock += 6;
+
+            PullStatus();
+            pc = PullWord();
+        }
+
+        private void RTS()
+        {
+            clock += 6;
+
+            pc = PullWord();
+        }
+
+        private void JSR()
+        {
+            clock += 6;
+
+            ushort argument = (ushort)(pc + 1);
+            PushWord(argument);
+            pc = system.memory.ReadWord(argument);
+        }
+
+        private void Branch(bool cond)
+        {
+            clock += 2;
+
+            if (cond)
+            {
+                clock++;
+
+                var argument = (ushort)(pc + 1);
+                var address = (sbyte)(system.memory.Read(argument));
+                var page = pc >> 8;
+                pc = (ushort)(pc + address);
+                var npage = pc >> 8;
+
+                if (page != npage)
+                    clock++;
+            }
+            else
+            {
+                pc += 2;
+            }
+        }
+
+        internal void TAX()
+        {
+            pc += 1; 
+            clock += 2;
+
+            SetNegativeAndZero(a);
+
+            x = a;
+        }
+
+        internal void TXA()
+        {
+            pc += 1;
+            clock += 2;
+
+            SetNegativeAndZero(a);
+
+            a = x;
+        }
+
+        internal void TAY()
+        {
+            pc += 1;
+            clock += 2;
+
+            SetNegativeAndZero(a);
+
+            y = a;
+        }
+
+        internal void TYA()
+        {
+            pc += 1;
+            clock += 2;
+
+            SetNegativeAndZero(a);
+
+            a = y;
+        }
+
+        internal void TXS()
+        {
+            pc += 1;
+            clock += 2;
+
+            SetNegativeAndZero(sp);
+
+            x = sp;
+        }
+
+        internal void TSX()
+        {
+            pc += 1;
+            clock += 2;
+
+            sp = x;
+        }
+        internal void PLA()
+        {
+            pc += 1;
+            clock += 4;
+
+            sp++;
+            a = system.memory.Read((ushort)(sp + 0x100));
+
+            SetNegativeAndZero(a);
+        }
+
+        internal void PHA()
+        {
+            pc += 1;
+            clock += 3;
+
+            system.memory.Write((ushort)(sp + 0x100), a);
+            sp--;
+        }
+
+        internal void PLP()
+        {
+            pc += 1;
+            clock += 4;
+
+            PullStatus();
+        }
+
+        private void PullStatus()
+        {
+            status.Set(Pull());
+        }
+
+        private byte Pull()
+        {
+            sp++;
+            var value = system.memory.Read((ushort)(sp + 0x100));
+
+            return value;
+        }
+
+        private ushort PullWord()
+        {
+            return (ushort)(Pull() | (Pull() << 8));
+        }
+
+        internal void PHP()
+        {
+            pc += 1;
+            clock += 3;
+
+            PushStatus();
+        }
+
+        private void PushStatus()
+        {
+            Push(status.AsByte());
+        }
+
+        private void PushWord(ushort value)
+        {
+            Push((byte)(value >> 8));
+            Push((byte)(value & 0xFF));
+        }
+
+        private void Push(byte value)
+        {
+            system.memory.Write((ushort)(sp + 0x100), value);
+            sp--;
+        }
+
+        internal void Store(byte value, Mode mode)
+        {
+            clock += mode switch
+            {
+                Mode.ZP or Mode.ZPY => 3,
+                Mode.ABS or Mode.ZPX => 4,
+                Mode.ABSX or Mode.ABSY => 5,
+                Mode.INDX or Mode.INDY => 6,
+                _ => throw new Exception("Invalid Write"),
+            };
+
+            WriteNext(mode, value);
+        }
+
+        internal byte Load(Mode mode)
+        {
+            clock += mode switch
+            {
+                Mode.IMM => 2,
+                Mode.ZP => 3,
+                Mode.ZPX or Mode.ZPY or Mode.ABS or Mode.ABSX or Mode.ABSY => 4,
+                Mode.INDX => 6,
+                Mode.INDY => 5,
+                _ => throw new Exception("Invalid Load"),
+            };
+
+            var value = ReadNext(mode, true);
+            SetNegativeAndZero(value);
+            return value;
+        }
+
+        #endregion
+    }
+}

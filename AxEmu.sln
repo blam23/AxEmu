@@ -1,0 +1,37 @@
+﻿
+Microsoft Visual Studio Solution File, Format Version 12.00
+# Visual Studio Version 17
+VisualStudioVersion = 17.4.33103.184
+MinimumVisualStudioVersion = 10.0.40219.1
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "AxEmu", "AxEmu\AxEmu.csproj", "{20B8CF15-46D9-40F1-A350-066C81FD6780}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "EmuConsole", "EmuConsole\EmuConsole.csproj", "{5E9ED2DD-752B-4441-B948-C9BC730CF986}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "AxEmuTest", "AxEmuTest\AxEmuTest.csproj", "{3B9B8F28-08D1-40A1-92B1-707CED14297A}"
+EndProject
+Global
+	GlobalSection(SolutionConfigurationPlatforms) = preSolution
+		Debug|Any CPU = Debug|Any CPU
+		Release|Any CPU = Release|Any CPU
+	EndGlobalSection
+	GlobalSection(ProjectConfigurationPlatforms) = postSolution
+		{20B8CF15-46D9-40F1-A350-066C81FD6780}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{20B8CF15-46D9-40F1-A350-066C81FD6780}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{20B8CF15-46D9-40F1-A350-066C81FD6780}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{20B8CF15-46D9-40F1-A350-066C81FD6780}.Release|Any CPU.Build.0 = Release|Any CPU
+		{5E9ED2DD-752B-4441-B948-C9BC730CF986}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{5E9ED2DD-752B-4441-B948-C9BC730CF986}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{5E9ED2DD-752B-4441-B948-C9BC730CF986}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{5E9ED2DD-752B-4441-B948-C9BC730CF986}.Release|Any CPU.Build.0 = Release|Any CPU
+		{3B9B8F28-08D1-40A1-92B1-707CED14297A}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{3B9B8F28-08D1-40A1-92B1-707CED14297A}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{3B9B8F28-08D1-40A1-92B1-707CED14297A}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{3B9B8F28-08D1-40A1-92B1-707CED14297A}.Release|Any CPU.Build.0 = Release|Any CPU
+	EndGlobalSection
+	GlobalSection(SolutionProperties) = preSolution
+		HideSolutionNode = FALSE
+	EndGlobalSection
+	GlobalSection(ExtensibilityGlobals) = postSolution
+		SolutionGuid = {B6405291-D320-4079-9E30-876107550BB7}
+	EndGlobalSection
+EndGlobal
