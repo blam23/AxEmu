@@ -68,6 +68,20 @@
         negative : {Negative}
 ";
             }
+
+            internal string ToSmallString()
+            {
+                return string.Format
+                (
+                    "{0}{1}-- {2}{3}{4}{5}",
+                    Negative ? 'N' : '-',
+                    Overflow ? 'V' : '-',
+                    Decimal ? 'D' : '-',
+                    InterruptDisable ? 'I' : '-',
+                    Zero ? 'Z' : '-',
+                    Carry ? 'C' : '-'
+                );
+            }
         }
 
         // Registers
@@ -79,6 +93,8 @@
         internal StatusRegister status; // p
 
         // Clock
+        internal ulong totalClock = 0;
+        internal ulong lastClock = 0;
         internal ulong clock = 0;
 
         private void SetInitialState()
@@ -117,12 +133,22 @@ CPU:
 ";
         }
 
+        internal string ToSmallString()
+        {
+            return $"{pc:X4} | a: {a:X2} | x: {x:X2} | y: {y:X2} | s: {sp:X2} | {status.ToSmallString()}";
+        }
+
         public void Iterate()
         {
             byte op = system.memory.Read(pc);
 
             if (opCodeActions.TryGetValue(op, out var opAction))
+            {
                 opAction(this);
+                totalClock += clock;
+                lastClock = clock;
+                clock = 0;
+            }
             else
                 throw new NotImplementedException($"Opcode not supported: {op}");
         }
@@ -132,6 +158,7 @@ CPU:
         // http://www.oxyron.de/html/opcodes02.html
         internal enum Mode
         {
+            None,
             IMP,
             IMM,
             ZP,
@@ -146,7 +173,7 @@ CPU:
             REL
         }
 
-        private readonly Dictionary<ushort, Action<CPU>> opCodeActions = new()
+        internal readonly Dictionary<ushort, Action<CPU>> opCodeActions = new()
         {
             //
             // MOVE
@@ -214,14 +241,14 @@ CPU:
             //
 
             // Branch
-            { 0x10, (c) => c.Branch(!c.status.Negative) }, // BPL
-            { 0x30, (c) => c.Branch( c.status.Negative) }, // BMI
-            { 0x50, (c) => c.Branch(!c.status.Overflow) }, // BVC
-            { 0x70, (c) => c.Branch( c.status.Overflow) }, // BVS
-            { 0x90, (c) => c.Branch(!c.status.Carry) },    // BCC
-            { 0xB0, (c) => c.Branch( c.status.Carry) },    // BCS
-            { 0xD0, (c) => c.Branch(!c.status.Zero) },     // BNE
-            { 0xF0, (c) => c.Branch( c.status.Zero) },     // BEQ
+            { 0x10, (c) => c.Branch(! c.status.Negative) },
+            { 0x30, (c) => c.Branch(c.status.Negative) },
+            { 0x50, (c) => c.Branch(! c.status.Overflow) },
+            { 0x70, (c) => c.Branch(c.status.Overflow) },
+            { 0x90, (c) => c.Branch(! c.status.Carry) },
+            { 0xB0, (c) => c.Branch(c.status.Carry) },
+            { 0xD0, (c) => c.Branch(! c.status.Zero) },
+            { 0xF0, (c) => c.Branch(c.status.Zero) },
 
             // Interrupts
             { 0x00, (c) => c.BRK() },
@@ -230,13 +257,13 @@ CPU:
             { 0x60, (c) => c.RTS() },
 
             // Jumps
-            { 0x4C, (c) => c.Jump(Mode.ZP) },
+            { 0x4C, (c) => c.Jump(Mode.ABS) },
             { 0x6C, (c) => c.Jump(Mode.IND) },
 
             // Flag Stuff
             { 0xEA, (c) => c.NOP() },
-            { 0x24, (c) => c.TestBit(Mode.ZP) },  // BIT ZP
-            { 0x2C, (c) => c.TestBit(Mode.ABS) }, // BIT ABS
+            { 0x24, (c) => c.TestBit(Mode.ZP) },
+            { 0x2C, (c) => c.TestBit(Mode.ABS) },
             { 0x18, (c) => { c.NOP(); c.status.Carry = false; } },            // CLC
             { 0x38, (c) => { c.NOP(); c.status.Carry = true; } },             // SEC
             { 0xD8, (c) => { c.NOP(); c.status.Decimal = false; } },          // CLD
@@ -398,9 +425,9 @@ CPU:
                     pc += 3;
                     addr = system.memory.ReadWord(argument);
 
-                    page = addr >> 2;
+                    page = addr >> 8;
                     addr += x;
-                    newpage = addr >> 2;
+                    newpage = addr >> 8;
 
                     if (watchPageBoundary && page != newpage)
                         clock++;
@@ -411,9 +438,9 @@ CPU:
 
                     addr = system.memory.ReadWord(argument);
 
-                    page = addr >> 2;
+                    page = addr >> 8;
                     addr += y;
-                    newpage = addr >> 2;
+                    newpage = addr >> 8;
 
                     if (watchPageBoundary && page != newpage)
                         clock++;
@@ -430,9 +457,9 @@ CPU:
                     addr = system.memory.Read(argument);
                     addr = system.memory.ReadWord((ushort)(addr & 0xFF));
 
-                    page = addr >> 2;
+                    page = addr >> 8;
                     addr += y;
-                    newpage = addr >> 2;
+                    newpage = addr >> 8;
 
                     if (watchPageBoundary && page != newpage)
                         clock++;
@@ -720,7 +747,7 @@ CPU:
 
             switch(mode)
             {
-                case Mode.ZP:
+                case Mode.ABS:
                     clock += 3;
                     addr = system.memory.ReadWord(argument);
                     pc = addr;
@@ -758,15 +785,15 @@ CPU:
             clock += 6;
 
             pc = PullWord();
+            pc++;
         }
 
         private void JSR()
         {
             clock += 6;
 
-            ushort argument = (ushort)(pc + 1);
-            PushWord(argument);
-            pc = system.memory.ReadWord(argument);
+            PushWord((ushort)(pc + 2));
+            pc = system.memory.ReadWord((ushort)(pc + 1));
         }
 
         private void Branch(bool cond)
@@ -779,6 +806,7 @@ CPU:
 
                 var argument = (ushort)(pc + 1);
                 var address = (sbyte)(system.memory.Read(argument));
+                pc += 2;
                 var page = pc >> 8;
                 pc = (ushort)(pc + address);
                 var npage = pc >> 8;
@@ -832,7 +860,7 @@ CPU:
             a = y;
         }
 
-        internal void TXS()
+        internal void TSX()
         {
             pc += 1;
             clock += 2;
@@ -842,13 +870,14 @@ CPU:
             x = sp;
         }
 
-        internal void TSX()
+        internal void TXS()
         {
             pc += 1;
             clock += 2;
 
             sp = x;
         }
+
         internal void PLA()
         {
             pc += 1;
@@ -950,6 +979,8 @@ CPU:
             SetNegativeAndZero(value);
             return value;
         }
+
+
 
         #endregion
     }
