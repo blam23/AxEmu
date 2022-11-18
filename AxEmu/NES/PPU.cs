@@ -22,14 +22,19 @@ namespace AxEmu.NES
         public const uint RenderHeight = 240;
 
         // Frame Info
+        internal ulong frame = 0;
         internal ulong clock;
         internal bool  oddEvenFlag       = false;
         internal bool  vblank            = false;
         internal bool  dontVBlank        = false;
         internal bool  renderingEnabled  = false;
+
+        // Pixel data
         internal ulong x = 0;
         internal ulong y = 0;
-        internal ulong frame = 0;
+        internal bool scrollingX = true;
+        internal byte scrollX = 0;
+        internal byte scrollY = 0;
 
         // Control Info
         internal ushort     BaseTableAddr     = 0x2000;
@@ -39,6 +44,16 @@ namespace AxEmu.NES
         internal SpriteSize CurrentSpriteSize = SpriteSize.s8x8;
         internal bool       WriteEXTPins      = false;
         internal bool       NMIOnVBlank       = false;
+
+        // Mask info
+        internal bool Greyscale              = false;
+        internal bool ShowBackgroundLeftmost = false;
+        internal bool ShowSpritesLeftmost    = false;
+        internal bool ShowBackground         = true;
+        internal bool ShowSprites            = true;
+        internal bool EmphasizeRed           = false;
+        internal bool EmphasizeGreen         = false;
+        internal bool EmphasizeBlue          = false;
 
         // Data
         internal readonly byte[] OAM  = new byte[0x100];
@@ -150,7 +165,14 @@ namespace AxEmu.NES
 
         private void WriteMask(byte value)
         {
-
+            Greyscale              = (value & 0x01) == 0x01;
+            ShowBackgroundLeftmost = (value & 0x02) == 0x02;
+            ShowSpritesLeftmost    = (value & 0x04) == 0x04;
+            ShowBackground         = (value & 0x08) == 0x08;
+            ShowSprites            = (value & 0x10) == 0x10;
+            EmphasizeRed           = (value & 0x20) == 0x20;
+            EmphasizeGreen         = (value & 0x40) == 0x40;
+            EmphasizeBlue          = (value & 0x80) == 0x80;
         }
 
         private void WriteAddr(byte value)
@@ -165,23 +187,51 @@ namespace AxEmu.NES
 
         private byte ReadAddrValue()
         {
-            if (Addr >= 0x4000 || Addr < 0x2000)
-                return 0; // TODO: Fix this
+            byte ret = 0;
 
-            var ret = VRAM[Addr - 0x2000];
+            if (Addr < 0x1000)
+            {
+                ret = VRAMPage0000[Addr];
+            }
+            else if (Addr < 0x2000)
+            {
+                ret = VRAMPage1000[Addr - 0x1000];
+            }
+            else if (Addr < 0x4000)
+            {
+                ret = VRAM[Addr - 0x2000];
+            }
+
             Addr += VRAMAddrInc;
             return ret;
         }
 
         private void WriteAddrValue(byte value)
         {
-            Console.WriteLine($"VRAM[{Addr - 0x2000:X4}] = {value:X2}");
+            if (Addr < 0x1000)
+            {
+                VRAMPage0000[Addr] = value;
+            }
+            else if (Addr < 0x2000)
+            {
+                VRAMPage1000[Addr - 0x1000] = value;
+            }
+            else if (Addr < 0x4000)
+            {
+                VRAM[Addr - 0x2000] = value;
+            }
 
-            if (Addr >= 0x4000 || Addr < 0x2000)
-                return; // TODO: Fix this
-
-            VRAM[Addr - 0x2000] = value;
             Addr += VRAMAddrInc;
+        }
+
+        private void WriteScroll(byte value)
+        {
+            if (scrollingX)
+                scrollX = value;
+            else 
+                scrollY = value;
+
+            scrollingX = !scrollingX;
         }
 
         internal byte Read(ushort address)
@@ -200,6 +250,8 @@ namespace AxEmu.NES
                 WriteCtrl(value);
             if (address == 0x2001)
                 WriteMask(value);
+            if (address == 0x2005)
+                WriteScroll(value);
             if (address == 0x2006)
                 WriteAddr(value);
             if (address == 0x2007)
@@ -298,8 +350,6 @@ namespace AxEmu.NES
                 return;
 
             // Apply scrolling
-            var scrollX = 0ul;
-            var scrollY = 0ul;
             var ox = (x + scrollX) % RenderWidth;
             var oy = (y + scrollY) % RenderHeight;
 
@@ -322,8 +372,19 @@ namespace AxEmu.NES
 
             var firstEntry = nametableEntry * 0x10 + (int)y % 8;
             var secondEntry = nametableEntry * 0x10 + (int)y % 8 + 8;
-            var firstPlaneByte  = VRAMPage0000[firstEntry];
-            var secondPlaneByte = VRAMPage0000[secondEntry];
+
+            byte firstPlaneByte = 0;
+            byte secondPlaneByte = 0;
+            if (BackTableAddr == 0x0000)
+            {
+                firstPlaneByte = VRAMPage0000[firstEntry];
+                secondPlaneByte = VRAMPage0000[secondEntry];
+            }
+            else
+            {
+                firstPlaneByte = VRAMPage1000[firstEntry];
+                secondPlaneByte = VRAMPage1000[secondEntry];
+            }
 
             var firstPlaneBit  = (byte)(firstPlaneByte >> (byte)(7 - x % 8) & 1);
             var secondPlaneBit = (byte)(secondPlaneByte >> (byte)(7 - x % 8) & 1);
