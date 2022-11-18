@@ -1,15 +1,15 @@
 ﻿namespace AxEmu.NES
 {
-    internal class CPU
+    public class CPU
     {
         // https://www.nesdev.org/wiki/CPU
 
         private System system;
 
         // Interrupt vector addresses
-        public const ushort NMI_VECTOR = 0xFFFA;   // NMI vector word address
+        public const ushort NMI_VECTOR   = 0xFFFA; // NMI vector word address
         public const ushort RESET_VECTOR = 0xFFFC; // Reset vector word address
-        public const ushort IRQ_VECTOR = 0xFFFE;   // IRQ vector word address
+        public const ushort IRQ_VECTOR   = 0xFFFE; // IRQ vector word address
 
         internal struct StatusRegister
         {
@@ -38,7 +38,7 @@
                     Break = (inp & 0x10) == 0x10;
             }
 
-            public byte AsByte()
+            public byte AsByte(bool overrideBreakWithTrue = false)
             {
                 byte r = 0;
 
@@ -46,7 +46,7 @@
                 r |= (byte)(Zero ? 0x2 : 0);
                 r |= (byte)(InterruptDisable ? 0x4 : 0);
                 r |= (byte)(Decimal ? 0x8 : 0);
-                r |= (byte)(Break ? 0x10 : 0);
+                r |= (byte)(Break || overrideBreakWithTrue ? 0x10 : 0);
                 r |= 0x20;
                 r |= (byte)(Overflow ? 0x40 : 0);
                 r |= (byte)(Negative ? 0x80 : 0);
@@ -96,6 +96,10 @@
         internal ulong totalClock = 0;
         internal ulong lastClock = 0;
         internal ulong clock = 0;
+        internal ulong instrs = 0;
+
+        // Interrupts
+        private bool NMISet = false;
 
         private void SetInitialState()
         {
@@ -133,7 +137,7 @@ CPU:
 ";
         }
 
-        internal string ToSmallString()
+        public string ToSmallString()
         {
             return $"{pc:X4} | a: {a:X2} | x: {x:X2} | y: {y:X2} | s: {sp:X2} | {status.ToSmallString()}";
         }
@@ -150,7 +154,33 @@ CPU:
                 clock = 0;
             }
             else
-                throw new NotImplementedException($"Opcode not supported: {op}");
+            {
+                //pc++;
+                throw new NotImplementedException($"Opcode not supported: {op:X2}");
+            }
+
+            instrs++;
+        }
+
+        public void CheckInterrupts()
+        {
+            if (NMISet)
+                NMI();
+        }
+
+        internal void SetNMI()
+        {
+            NMISet = true;
+        }
+
+        private void NMI()
+        {
+            NMISet = false;
+
+            PushWord(pc);
+            PushStatus();
+
+            pc = system.memory.ReadWord(NMI_VECTOR);
         }
 
         #region Op Codes
@@ -450,12 +480,12 @@ CPU:
                     pc += 2;
 
                     addr = (ushort)(system.memory.Read(argument) + x);
-                    return system.memory.ReadWord((ushort)(addr & 0xFF));
+                    return system.memory.ReadWord(addr);
                 case Mode.INDY:
                     pc += 2;
 
                     addr = system.memory.Read(argument);
-                    addr = system.memory.ReadWord((ushort)(addr & 0xFF));
+                    addr = system.memory.ReadWord(addr);
 
                     page = addr >> 8;
                     addr += y;
@@ -509,6 +539,7 @@ CPU:
             // DEC, ROL, ROR, LSR, ASL
             clock += mode switch
             {
+                Mode.IMM => 2,
                 Mode.ZP => 5,
                 Mode.ZPX or Mode.ABS => 6,
                 Mode.ABSX => 7,
@@ -569,16 +600,18 @@ CPU:
             AddArthClockTime(mode);
 
             long res = value - ReadNext(mode);
-            status.Negative = (value & 0x80) == 0x80;
-            status.Zero = value == 0;
+            status.Negative = (res & 0x80) == 0x80;
+            status.Zero = res == 0;
             status.Carry = res >= 0;
         }
 
         private byte Dec(byte value)
         {
+            AddShiftClockTime(Mode.IMM);
+
             pc++;
             byte ret = (byte)(value - 1);
-            SetNegativeAndZero(value);
+            SetNegativeAndZero(ret);
             return ret;
         }
 
@@ -596,9 +629,11 @@ CPU:
         }
         private byte Inc(byte value)
         {
+            AddShiftClockTime(Mode.IMM);
+
             pc++;
             byte ret = (byte)(value + 1);
-            SetNegativeAndZero(value);
+            SetNegativeAndZero(ret);
             return ret;
         }
 
@@ -617,10 +652,12 @@ CPU:
 
         private byte Asl(byte value)
         {
+            AddShiftClockTime(Mode.IMM);
+
             pc++;
             status.Carry = (value & 0x80) == 0x80;
             byte ret = (byte)(value << 1);
-            SetNegativeAndZero(value);
+            SetNegativeAndZero(ret);
             return ret;
         }
 
@@ -640,10 +677,12 @@ CPU:
 
         private byte Lsr(byte value)
         {
+            AddShiftClockTime(Mode.IMM);
+
             pc++;
             status.Carry = (value & 0x1) == 0x1;
             byte ret = (byte)(value >> 1);
-            SetNegativeAndZero(value);
+            SetNegativeAndZero(ret);
             return ret;
         }
 
@@ -662,22 +701,26 @@ CPU:
 
         private byte Rol(byte value)
         {
+            bool prevCarry = status.Carry;
+            AddShiftClockTime(Mode.IMM);
+
             pc++;
             status.Carry = (value & 0x80) == 0x80;
-            byte ret = (byte)((value << 1) + (status.Carry ? 1 : 0));
-            SetNegativeAndZero(value);
+            byte ret = (byte)((value << 1) + (prevCarry ? 1 : 0));
+            SetNegativeAndZero(ret);
             return ret;
         }
 
         private void RolAddr(Mode mode)
         {
+            bool prevCarry = status.Carry;
             AddShiftClockTime(mode);
 
             var addr = GetAddress(mode, false);
 
             var value = system.memory.Read(addr);
             status.Carry = (value & 0x80) == 0x80;
-            value = (byte)((value << 1) + (status.Carry ? 1 : 0));
+            value = (byte)((value << 1) + (prevCarry ? 1 : 0));
             SetNegativeAndZero(value);
 
             system.memory.Write(addr, value);
@@ -685,21 +728,25 @@ CPU:
 
         private byte Ror(byte value)
         {
+            bool prevCarry = status.Carry;
+            AddShiftClockTime(Mode.IMM);
+
             pc++;
             status.Carry = (value & 0x1) == 0x1;
-            byte ret = (byte)((value >> 1) + (status.Carry ? 0x80 : 0));
-            SetNegativeAndZero(value);
+            byte ret = (byte)((value >> 1) + (prevCarry ? 0x80 : 0));
+            SetNegativeAndZero(ret);
             return ret;
         }
 
         private void RorAddr(Mode mode)
         {
+            bool prevCarry = status.Carry;
             AddShiftClockTime(mode);
 
             var addr = GetAddress(mode, false);
             var value = system.memory.Read(addr);
             status.Carry = (value & 0x1) == 0x1;
-            value = (byte)((value >> 1) + (status.Carry ? 0x80 : 0));
+            value = (byte)((value >> 1) + (prevCarry ? 0x80 : 0));
             SetNegativeAndZero(value);
 
             system.memory.Write(addr, value);
@@ -755,8 +802,16 @@ CPU:
                 case Mode.IND:
                     clock += 5;
                     addr = system.memory.ReadWord(argument);
-                    addr = system.memory.ReadWord(addr);
-                    pc = addr;
+
+                    // Special logic to avoid last byte of page
+
+                    ushort high = (ushort)((addr & 0xFF) == 0xFF ? addr - 0xFF : addr + 1);
+                    var oldPC = pc;
+                    pc = (ushort)(system.memory.Read(addr) | system.memory.Read(high) << 8);
+
+                    if ((oldPC & 0xFF00) != (pc & 0xFF00)) 
+                        clock += 2;
+
                     break;
                 default:
                     throw new Exception("Invalid JMP");
@@ -767,6 +822,7 @@ CPU:
         {
             clock += 7;
 
+            PushWord(pc);
             PushStatus();
             pc = system.memory.ReadWord(0xFFFE);
             status.InterruptDisable = true;
@@ -904,6 +960,7 @@ CPU:
             clock += 4;
 
             PullStatus();
+            status.Break = false;
         }
 
         private void PullStatus()
@@ -934,7 +991,7 @@ CPU:
 
         private void PushStatus()
         {
-            Push(status.AsByte());
+            Push(status.AsByte(true));
         }
 
         private void PushWord(ushort value)
@@ -979,9 +1036,6 @@ CPU:
             SetNegativeAndZero(value);
             return value;
         }
-
-
-
         #endregion
     }
 }
