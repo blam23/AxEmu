@@ -20,16 +20,22 @@
             if (address < 0x4000)
                 return system.ppu.Read(address);
 
+            if (address == 0x4016)
+                return system.joyPad1.Read();
+
+            if (address == 0x4017)
+                return system.joyPad2.Read();
+
             if (address < 0x4020)
                 return system.apu.read(address);
 
-            if (address >= 0x8000 && address < 0xBFFF)
+            if (address >= 0x8000 && address <= 0xBFFF)
                 return system.cart.prgRomPages[0][address - 0x8000];
 
             if (address >= 0xc000)
                 return system.cart.prgRomPages[^1][address - 0xc000];
 
-            throw new NotImplementedException("Need to map ROM n shit");
+            return 0;//throw new NotImplementedException("Need to map ROM n shit");
         }
         public ushort ReadWord(ushort address)
         {
@@ -46,12 +52,16 @@
 
             else if (address < 0x4000)
                 system.ppu.Write(address, value);
-
+            else if (address == 0x4016)
+                system.joyPad1.Poll(value);
+            else if (address == 0x4017)
+                system.joyPad2.Poll(value);
             else if (address < 0x4020)
                 system.apu.write(address, value);
 
-            else
-                Console.WriteLine($"<!> Unknown write to: {address:X4} -> {value:X2}");
+
+            //else
+                //Console.WriteLine($"<!> Unknown write to: {address:X4} -> {value:X2}");
                 //throw new NotImplementedException("Need to map ROM n shit");
         }
     }

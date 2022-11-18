@@ -2,7 +2,7 @@
 
 namespace AxEmu.NES
 {
-    internal class Cart
+    public class Cart
     {
         public enum State
         {
@@ -99,6 +99,9 @@ namespace AxEmu.NES
                 chrRomPages.Add(page);
                 pos += CHR_PAGE_SIZE;
             }
+
+            if (chrRomSize == 0)
+                chrRomPages.Add(new byte[CHR_PAGE_SIZE]);
 
             return true;
 

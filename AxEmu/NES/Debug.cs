@@ -37,26 +37,59 @@ namespace AxEmu.NES
             return addr;
         }
 
+        private static string Calc(string instr, string addr)
+        {
+            addr = PrettyAddress(addr);
+            return $"{instr} {addr}";
+        }
+
         private static string CalcName(System system, string instr, Mode addrMode = Mode.None)
         {
+            var cpu = system.cpu;
             var addr = addrMode switch
             {
                 Mode.IMM => $"#${NextByte(system):X2}",
                 Mode.REL => $"${(2+system.cpu.pc+(sbyte)NextByte(system)):X4}",
                 Mode.ZP => $"${NextByte(system):X4}",
-                Mode.ZPX => $"${NextByte(system):X4}, x({system.cpu.x:X2})",
-                Mode.ZPY => $"${NextByte(system):X4}, y({system.cpu.y:X2})",
-                Mode.INDX => $"$({NextByte(system):X4}, x({system.cpu.x:X2}))",
-                Mode.INDY => $"$({NextByte(system):X4}, y({system.cpu.y:X2}))",
+                Mode.ZPX => $"${NextByte(system):X4}, x({cpu.x:X2})",
+                Mode.ZPY => $"${NextByte(system):X4}, y({cpu.y:X2})",
+                Mode.INDX => $"$({NextByte(system):X4}, x({cpu.x:X2}))",
+                Mode.INDY => $"$({NextByte(system):X4}, y({cpu.y:X2}))",
                 Mode.ABS => $"${NextWord(system):X4}",
-                Mode.ABSX => $"${NextWord(system):X4}, x({system.cpu.x:X2})",
-                Mode.ABSY => $"${NextWord(system):X4}, y({system.cpu.y:X2})",
+                Mode.ABSX => $"${NextWord(system):X4}, x({cpu.x:X2})",
+                Mode.ABSY => $"${NextWord(system):X4}, y({cpu.y:X2})",
                 _ => ""
             };
 
-            addr = PrettyAddress(addr);
+            return Calc(instr, addr);
+        }
 
-            return $"{instr} {addr}";
+        private static string CalcName(System system, string instr, ushort addr)
+        {
+            var cpu = system.cpu;
+            var addrStr = $"${system.memory.ReadWord(addr)}";
+
+            return Calc(instr, addrStr);
+        }
+
+        public static string PPUState(System system)
+        {
+            var ppu = system.ppu;
+            return $@"PPU:
+  BaseTableAddr   : {ppu.BaseTableAddr:X4}
+  VRAMAddrInc     : {ppu.VRAMAddrInc:X4}
+  SpriteTableAddr : {ppu.SpriteTableAddr:X4}
+  BackTableAddr   : {ppu.BackTableAddr:X4}
+  NMIOnVBlank     : {(ppu.NMIOnVBlank ? 'Y' : 'N')}
+";
+        }
+
+        internal static string GetOpcodeName(System system, byte nextInstr)
+        {
+            if (OpCodeNames.TryGetValue(nextInstr, out var nameAction))
+                return nameAction(system);
+
+            return $"{nextInstr:X2}";
         }
 
         public static readonly Dictionary<ushort, Func<System, string>> OpCodeNames = new()
@@ -137,7 +170,7 @@ namespace AxEmu.NES
             { 0xF0, (c) => CalcName(c, "BEQ", Mode.REL) },
 
             // Interrupts
-            { 0x00, (c) => CalcName(c, "BRK") },
+            { 0x00, (c) => CalcName(c, "BRK", 0xFFFE) },
             { 0x20, (c) => CalcName(c, "JSR", Mode.ABS) },
             { 0x40, (c) => CalcName(c, "RTI") },
             { 0x60, (c) => CalcName(c, "RTS") },

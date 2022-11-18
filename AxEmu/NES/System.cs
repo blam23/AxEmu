@@ -5,11 +5,33 @@ namespace AxEmu.NES
     public class System
     {
         // Components
-        internal Cart cart = new();
-        internal CPU cpu;
-        internal PPU ppu;
-        internal APU apu;
-        internal IMemory memory;
+        public Cart cart = new();
+        public CPU cpu;
+        public PPU ppu;
+        public APU apu;
+        public JoyPad joyPad1;
+        public JoyPad joyPad2;
+        public IMemory memory;
+
+        // Helpers
+        public Debugger debug;
+
+        // Events
+        public delegate void FrameEvent(byte[] bitmap);
+        public event FrameEvent FrameCompleted;
+
+        // Control
+        private ManualResetEvent? CycleWaitEvent;
+
+        public void SetCycleWaitEvent(ManualResetEvent evt)
+        {
+            CycleWaitEvent = evt;
+        }
+
+        protected virtual void OnFrameCompleted(byte[] bitmap)
+        {
+            FrameCompleted?.Invoke(bitmap);
+        }
 
         public System(string ROMFileLocation)
             : this()
@@ -23,6 +45,9 @@ namespace AxEmu.NES
             cpu = new CPU(this);
             ppu = new PPU(this);
             apu = new APU(this);
+            joyPad1 = new JoyPad(this);
+            joyPad2 = new JoyPad(this);
+            debug = new Debugger(this);
         }
 
         public System(IMemory memory)
@@ -31,6 +56,9 @@ namespace AxEmu.NES
             cpu = new CPU(this);
             ppu = new PPU(this);
             apu = new APU(this);
+            joyPad1 = new JoyPad(this);
+            joyPad2 = new JoyPad(this);
+            debug = new Debugger(this);
         }
 
         private void Reset()
@@ -53,29 +81,47 @@ namespace AxEmu.NES
                 throw new Exception("Error loading ROM file");
 
             cpu.Init();
+            ppu.Init();
+
+            ppu.FrameCompleted += (frame) => OnFrameCompleted(frame);
+        }
+
+        public string GetInstr()
+        {
+            var nextInstr = memory.Read(cpu.pc);
+            return Debug.GetOpcodeName(this, nextInstr);
         }
 
         public void Run(bool consoleDebug = false, bool waitForKey = false)
         {
             while (true)
             {
+                // TODO: Move to debugger
                 if (consoleDebug)
                 {
-                    var nextInstr = memory.Read(cpu.pc);
-                    var prettyInstr = Debug.OpCodeNames[nextInstr](this);
-                    Console.WriteLine($"{cpu.ToSmallString()} | {prettyInstr}");
-
-                    if (waitForKey)
-                    {
-                        var key = Console.ReadKey(true);
-
-                        if (key.Key == ConsoleKey.Escape)
-                            break;
-                    }
+                    Console.WriteLine($"{cpu.ToSmallString()} | {GetInstr()}");
                 }
 
+                // TODO: Move to debugger
+                if (waitForKey)
+                {
+                    var key = Console.ReadKey(true);
+
+                    if (key.Key == ConsoleKey.P)
+                        Console.WriteLine(Debug.PPUState(this));
+
+                    if (key.Key == ConsoleKey.Escape)
+                        break;
+                }
+
+                // Wait for our cycle event if one is set (such as a debugger)
+                CycleWaitEvent?.WaitOne();
+
+                cpu.CheckInterrupts();
                 cpu.Iterate();
                 ppu.Tick(cpu.lastClock * 3);
+
+                //debug.OnInstruction();
             }
         }
     }

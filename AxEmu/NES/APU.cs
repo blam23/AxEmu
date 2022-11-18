@@ -1,6 +1,6 @@
 ﻿namespace AxEmu.NES
 {
-    internal class APU
+    public class APU
     {
         private System system;
 
