@@ -10,6 +10,9 @@ namespace AxEmu.NES
     {
         byte Read(ushort address);
         ushort ReadWord(ushort address);
+
+        ushort ReadWordWrapped(ushort address);
+
         void Write(ushort address, byte value);
     }
 }

@@ -26,5 +26,10 @@ namespace AxEmuTest.NESTest.Mocks
         {
             Written[address] = value;
         }
+
+        public ushort ReadWordWrapped(ushort address)
+        {
+            return ReadWord(address);
+        }
     }
 }

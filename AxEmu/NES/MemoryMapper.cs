@@ -45,6 +45,12 @@
             return r;
         }
 
+        public ushort ReadWordWrapped(ushort address)
+        {
+            ushort high = (ushort)((address & 0xFF) == 0xFF ? address - 0xFF : address + 1);
+            return (ushort)(Read(address) | Read(high) << 8);
+        }
+
         public void Write(ushort address, byte value)
         {
             if (address < 0x2000)

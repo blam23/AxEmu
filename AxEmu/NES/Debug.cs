@@ -282,8 +282,8 @@ namespace AxEmu.NES
             { 0xFE, (c) => CalcName(c, "INC", Mode.ABSX) },
 
             // INX, INY
-            { 0xE8, (c) => CalcName(c, "INX", Mode.INDX) },
-            { 0xC8, (c) => CalcName(c, "INY", Mode.INDY) },
+            { 0xE8, (c) => CalcName(c, "INX") },
+            { 0xC8, (c) => CalcName(c, "INY") },
 
             // ASL
             { 0x0A, (c) => CalcName(c, "ASL") },

@@ -444,10 +444,10 @@ CPU:
                     return addr;
                 case Mode.ZPX:
                     pc += 2;
-                    return (ushort)(system.memory.Read(argument) + x);
+                    return (ushort)((system.memory.Read(argument) + x) & 0xFF);
                 case Mode.ZPY:
                     pc += 2;
-                    return (ushort)(system.memory.Read(argument) + y);
+                    return (ushort)((system.memory.Read(argument) + y) & 0xFF);
                 case Mode.ABS:
                     pc += 3;
                     return system.memory.ReadWord(argument);
@@ -479,22 +479,19 @@ CPU:
                 case Mode.INDX:
                     pc += 2;
 
-                    addr = (ushort)(system.memory.Read(argument) + x);
-                    return system.memory.ReadWord(addr);
+                    addr = system.memory.Read(argument);
+                    uint naddr = (uint)(addr + x);
+                    return system.memory.ReadWordWrapped((ushort)(naddr & 0xFFFF));
                 case Mode.INDY:
                     pc += 2;
 
                     addr = system.memory.Read(argument);
-                    addr = system.memory.ReadWord(addr);
+                    addr = system.memory.ReadWordWrapped(addr);
 
-                    page = addr >> 8;
-                    addr += y;
-                    newpage = addr >> 8;
-
-                    if (watchPageBoundary && page != newpage)
+                    if (watchPageBoundary && ((addr & 0xFF00) != ((addr + y) & 0xFF00)))
                         clock++;
 
-                    return addr;
+                    return (ushort)((addr + y) & 0xFFFF);
                 case Mode.IMP:
                 case Mode.IND:
                 case Mode.REL:
@@ -574,25 +571,34 @@ CPU:
             return ret;
         }
 
-        private byte Add(byte input, Mode mode)
+        private byte AddCarry(byte input, byte operand)
         {
-            AddArthClockTime(mode);
-
-            byte operand = ReadNext(mode);
-
             int result = (sbyte)input + (sbyte)operand + (sbyte)(status.Carry ? 1 : 0);
 
             status.Overflow = result < -128 || result > 127;
             status.Carry = (input + operand + (status.Carry ? 1 : 0)) > 0xFF;
 
-            byte ret = (byte)(result & 0xFF);
+            byte ret = (byte)(result);
             SetNegativeAndZero(ret);
+
             return ret;
         }
 
+        private byte Add(byte value, Mode mode)
+        {
+            AddArthClockTime(mode);
+            return AddCarry(value, ReadNext(mode));
+        }
+
+        // CBBD | a: 40 | x: AA | y: 72 | s: FB | ---- -I-C | SBC #$3F
+        // CBBF | a: FF | x: AA | y: 72 | s: FB | N--- -I-- | JSR $F94C
+
+        // should be a = 01, negative = false, carry = true
+
         private byte Sub(byte value, Mode mode)
         {
-            return Add((byte)~value, mode);
+            AddArthClockTime(mode);
+            return AddCarry(value, (byte)~ReadNext(mode));
         }
 
         private void Cmp(byte value, Mode mode)
@@ -802,12 +808,9 @@ CPU:
                 case Mode.IND:
                     clock += 5;
                     addr = system.memory.ReadWord(argument);
-
-                    // Special logic to avoid last byte of page
-
-                    ushort high = (ushort)((addr & 0xFF) == 0xFF ? addr - 0xFF : addr + 1);
+                   
                     var oldPC = pc;
-                    pc = (ushort)(system.memory.Read(addr) | system.memory.Read(high) << 8);
+                    pc = system.memory.ReadWordWrapped(addr);
 
                     if ((oldPC & 0xFF00) != (pc & 0xFF00)) 
                         clock += 2;
@@ -881,9 +884,8 @@ CPU:
             pc += 1; 
             clock += 2;
 
-            SetNegativeAndZero(a);
-
             x = a;
+            SetNegativeAndZero(a);
         }
 
         internal void TXA()
@@ -891,9 +893,8 @@ CPU:
             pc += 1;
             clock += 2;
 
-            SetNegativeAndZero(a);
-
             a = x;
+            SetNegativeAndZero(a);
         }
 
         internal void TAY()
@@ -901,9 +902,8 @@ CPU:
             pc += 1;
             clock += 2;
 
-            SetNegativeAndZero(a);
-
             y = a;
+            SetNegativeAndZero(a);
         }
 
         internal void TYA()
@@ -911,9 +911,9 @@ CPU:
             pc += 1;
             clock += 2;
 
-            SetNegativeAndZero(a);
 
             a = y;
+            SetNegativeAndZero(a);
         }
 
         internal void TSX()
@@ -921,9 +921,8 @@ CPU:
             pc += 1;
             clock += 2;
 
-            SetNegativeAndZero(sp);
-
             x = sp;
+            SetNegativeAndZero(x);
         }
 
         internal void TXS()
@@ -1031,6 +1030,11 @@ CPU:
                 Mode.INDY => 5,
                 _ => throw new Exception("Invalid Load"),
             };
+
+            if (mode == Mode.INDX) 
+            {
+                Console.WriteLine("AYY");
+            }
 
             var value = ReadNext(mode, true);
             SetNegativeAndZero(value);
