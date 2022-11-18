@@ -326,7 +326,7 @@ namespace AxEmu.NES
             var secondPlaneByte = VRAMPage0000[secondEntry];
 
             var firstPlaneBit  = (byte)(firstPlaneByte >> (byte)(7 - x % 8) & 1);
-            var secondPlaneBit = (byte)(firstPlaneByte >> (byte)(7 - x % 8) & 1);
+            var secondPlaneBit = (byte)(secondPlaneByte >> (byte)(7 - x % 8) & 1);
 
             var paletteIndex = firstPlaneBit + (secondPlaneBit * 2) + (colourBits * 4);
             var pixelColour = lookupBGPalette((byte)paletteIndex);
