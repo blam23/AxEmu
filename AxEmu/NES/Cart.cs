@@ -92,12 +92,18 @@ namespace AxEmu.NES
             }
 
             // Copy ROM data into CHR pages
+            var halfSize = CHR_PAGE_SIZE / 2;
             for (var i = 0; i < chrRomSize; i++)
             {
-                var page = new byte[CHR_PAGE_SIZE];
-                Array.Copy(rom, pos, page, 0, CHR_PAGE_SIZE);
-                chrRomPages.Add(page);
-                pos += CHR_PAGE_SIZE;
+                var pageA = new byte[CHR_PAGE_SIZE / 2];
+                Array.Copy(rom, pos, pageA, 0, halfSize);
+                chrRomPages.Add(pageA);
+                pos += CHR_PAGE_SIZE / 2;
+
+                var pageB = new byte[CHR_PAGE_SIZE / 2];
+                Array.Copy(rom, pos, pageB, 0, halfSize);
+                chrRomPages.Add(pageB);
+                pos += CHR_PAGE_SIZE / 2;
             }
 
             if (chrRomSize == 0)
