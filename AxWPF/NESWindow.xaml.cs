@@ -1,11 +1,8 @@
-﻿using System;
-using System.IO;
+﻿using System.IO;
 using System.Threading;
 using System.Windows;
 using System.Windows.Media;
 using System.Windows.Media.Imaging;
-using System.Windows.Media.Media3D;
-using System.Windows.Threading;
 
 namespace AxWPF
 {
@@ -25,14 +22,24 @@ namespace AxWPF
         private bool logFromNextKeypress = true;
         private StreamWriter? logWriteStream;
 
+        private Timer fpsTimer;
+        WPFConsole console;
+
         public NESWindow()
         {
             InitializeComponent();
 
             //nes = new("D:\\Test\\NES\\zelda.nes");
-            //nes = new("D:\\Test\\NES\\mario.nes");
-            nes = new("D:\\Test\\NES\\nes-test-roms-master\\other\\nestest.nes");
-            //nes = new("D:\\Test\\NES\\nes-test-roms-master\\other\\genie.nes");
+            nes = new("D:\\Test\\NES\\mario.nes");
+            //nes = new("D:\\Test\\NES\\kirby.nes");
+            //nes = new("D:\\Test\\NES\\nes-test-roms-master\\other\\flame.nes");
+            //nes = new("D:\\Test\\NES\\nes-test-roms-master\\other\\MOTION.NES");
+            //nes = new("D:\\Test\\NES\\nes-test-roms-master\\other\\GENIE.NES");
+            //nes = new("D:\\Test\\NES\\nes-test-roms-master\\other\\firefly.nes");
+            //nes = new("D:\\Test\\NES\\nes-test-roms-master\\other\\nestest.nes");
+            //nes = new("D:\\Test\\NES\\nes-test-roms-master\\scanline\\scanline.nes");
+            //nes = new("D:\\Test\\NES\\nes-test-roms-master\\spritecans-2011\\spritecans.nes");
+            //nes = new("D:\\Test\\NES\\nes-test-roms-master\\stress\\NEStress.NES");
 
             // Technically this can be a much lower bit image, but we might want ot apply some effects n stuff
             bitmap = new(
@@ -49,7 +56,7 @@ namespace AxWPF
 
             nes.SetCycleWaitEvent(frameWaitEvent);
 
-            var fpsTimer = new Timer((t) =>
+            fpsTimer = new Timer((t) =>
             {
                 Application.Current.Dispatcher.BeginInvoke(() => {
                     Title = $"NES - FPS: {frames}";
@@ -57,6 +64,26 @@ namespace AxWPF
                 });
             });
             fpsTimer.Change(0, 1000);
+
+            Closing += NESWindow_Closing;
+
+            console = new WPFConsole();
+            //console.Show();
+            //nes.debug.SetLogger(console);
+
+            Show();
+        }
+
+        private void NESWindow_Closing(object? sender, System.ComponentModel.CancelEventArgs e)
+        {
+            nes.ppu.FrameCompleted -= DispatchFrame;
+            fpsTimer.Dispose();
+
+            if (logging)
+                StopLog();
+
+            nes.debug.UnsetLogger();
+            console.Close();
         }
 
         public void DispatchFrame(byte[] frame)
