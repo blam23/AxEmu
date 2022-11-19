@@ -55,9 +55,10 @@
         {
             if (address < 0x2000)
                 internalRAM[address & 0x7ff] = value;
-
             else if (address < 0x4000)
                 system.ppu.Write(address, value);
+            else if (address == 0x4014)
+                system.ppu.OAMDMA(value);
             else if (address == 0x4016)
                 system.joyPad1.Poll(value);
             else if (address == 0x4017)
