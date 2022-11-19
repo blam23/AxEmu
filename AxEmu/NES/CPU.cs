@@ -480,8 +480,8 @@ CPU:
                     pc += 2;
 
                     addr = system.memory.Read(argument);
-                    uint naddr = (uint)(addr + x);
-                    return system.memory.ReadWordWrapped((ushort)(naddr & 0xFFFF));
+                    addr += x;
+                    return system.memory.ReadWordWrapped(addr);
                 case Mode.INDY:
                     pc += 2;
 
