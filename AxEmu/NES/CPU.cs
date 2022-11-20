@@ -481,6 +481,8 @@ CPU:
 
                     addr = system.memory.Read(argument);
                     addr += x;
+                    addr &= 0xFF;
+
                     return system.memory.ReadWordWrapped(addr);
                 case Mode.INDY:
                     pc += 2;
