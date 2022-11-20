@@ -44,7 +44,7 @@ namespace AxWPF
             // Technically this can be a much lower bit image, but we might want ot apply some effects n stuff
             bitmap = new(
                 (int)AxEmu.NES.PPU.RenderWidth, 
-                (int)AxEmu.NES.PPU.RenderHeight, 
+                (int)AxEmu.NES.PPU.RenderHeight - 8, 
                 96, 96, PixelFormats.Bgr24, null);
 
             image.Source = bitmap;
@@ -103,10 +103,10 @@ namespace AxWPF
             Application.Current.Dispatcher.BeginInvoke(
                 () => bitmap.WritePixels
                 (
-                    new Int32Rect(0, 0, bitmap.PixelWidth, bitmap.PixelHeight),
+                    new Int32Rect(0, 8, bitmap.PixelWidth, bitmap.PixelHeight - 8),
                     frame,
                     3 * bitmap.PixelWidth,
-                    0
+                    24 * bitmap.PixelWidth
                 )
             );
         }
