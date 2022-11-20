@@ -18,10 +18,17 @@ namespace AxEmu.NES
 
         // Events
         public delegate void FrameEvent(byte[] bitmap);
-        public event FrameEvent FrameCompleted;
+        public event FrameEvent? FrameCompleted;
 
         // Control
         private ManualResetEvent? CycleWaitEvent;
+        private bool running;
+        public bool Running => running;
+
+        public void Stop()
+        {
+            running = false;
+        }
 
         public void SetCycleWaitEvent(ManualResetEvent evt)
         {
@@ -94,7 +101,9 @@ namespace AxEmu.NES
 
         public void Run(bool consoleDebug = false, bool waitForKey = false)
         {
-            while (true)
+            running = true;
+
+            while (running)
             {
                 // TODO: Move to debugger
                 if (consoleDebug)

@@ -726,6 +726,9 @@ namespace AxEmu.NES
                         Bgr24Bitmap[(scanX + scanline * RenderWidth) * 3 + 0] = pixelColour.B;
                         Bgr24Bitmap[(scanX + scanline * RenderWidth) * 3 + 1] = pixelColour.G;
                         Bgr24Bitmap[(scanX + scanline * RenderWidth) * 3 + 2] = pixelColour.R;
+
+                        // Don't need to continue - we want the first sprite to be on top
+                        return;
                     }
                 }
             }
