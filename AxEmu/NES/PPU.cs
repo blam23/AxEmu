@@ -33,8 +33,8 @@ namespace AxEmu.NES
         // https://www.nesdev.org/wiki/PPU_scrolling#PPU_internal_registers
         internal struct Registers
         {
-            public byte v; // Current VRAM Address
-            public byte t; // Temporary VRAM Address (top left onscreen tile)
+            public ushort v; // Current VRAM Address
+            public ushort t; // Temporary VRAM Address (top left onscreen tile)
             public byte x; // Fine scroll (3 bit)
             public bool w; // First or second write toggle
         }
@@ -58,20 +58,16 @@ namespace AxEmu.NES
         internal bool  spriteZeroHit     = false;
 
         // Pixel data
-        internal ulong x           = 0;
+        internal ulong scanX       = 0;
         internal ulong scanline    = 0;
-        internal bool scrollingX   = true;
-        internal byte nextScrollX  = 0;
-        internal byte scrollX      = 0;
-        internal byte nextScrollY  = 0;
-        internal byte scrollY      = 0;
+        internal ulong scrollX     = 0;
+        internal ulong scrollY     = 0;
 
         // Sprite data
         internal List<Sprite> currentSprites = new(); // sprite data for current scanline
 
         // Control Info
         internal ushort     OAMAddress        = 0x0;
-        internal ushort     BaseTableAddr     = 0x2000;
         internal ushort     VRAMAddrInc       = 0x1;
         internal ushort     SpriteTableAddr   = 0x0;
         internal ushort     BackTableAddr     = 0x0;
@@ -105,10 +101,6 @@ namespace AxEmu.NES
             FrameCompleted?.Invoke(Bgr24Bitmap);
         }
 
-        // Registers
-        bool writeAddrUpper = true;
-        internal ushort Addr = 0;
-
         public PPU(System system)
         {
             this.system = system;
@@ -124,11 +116,43 @@ namespace AxEmu.NES
         {
             for (ulong i = 0; i < cycles; i++)
             {
-                x        = clock % ClocksPerLine;
+                scanX    = clock % ClocksPerLine;
                 scanline = clock / ClocksPerLine;
 
+                if(scanX >= 257 && scanX <= 320 
+                    && ((scanline > 1 && scanline < 239) || scanline == 261))
+                {
+                    OAMAddress = 0;
+                }
+
+                if(renderingEnabled && !vblank && scanX == 256
+                    && (scanline < 240 || scanline == 261))
+                {
+                    //incrementY();
+                }
+
+                // Copy over horizontal bits
+                if (renderingEnabled && scanX == 257)
+                {
+                    ushort horiBits = (ushort)(reg.t & 0x041f);
+                    reg.v &= 0xfbe0;
+                    reg.v |= horiBits;
+                }
+
+                // Copy over vertical bits
+                if (renderingEnabled && (scanX >= 280 && scanX < 304) && scanline == LinesPerFrame)
+                {
+                    ushort vertiBits = (ushort)(reg.t & 0x7be0);
+                    reg.v &= 0x041f;
+                    reg.v |= vertiBits;
+                }
+
+                // Calculate scroll offsets
+                scrollX = (ushort)((ushort)((reg.v & 0x1f) << 3) + reg.x);
+                scrollY = (ushort)((((reg.v >> 5) & 0x1f) << 3) + (reg.v >> 12));
+
                 // Start of new line - setup sprite data.
-                if (x == 320 && scanline >= 0 && scanline < RenderHeight)
+                if (scanX == 320 && scanline >= 0 && scanline < RenderHeight)
                     SetupSpritesOnNextLine();
 
                 bool solidBG = false;
@@ -140,12 +164,13 @@ namespace AxEmu.NES
 
                 clock++;
 
-                scrollX = nextScrollX;
-                scrollY = nextScrollY;
-
-                if (scanline == VBlankLine && x == 1)
+                if (scanline == VBlankLine && scanX == 1)
                 {
                     vblank = true;
+                }
+
+                if (scanline == 261 && scanX == 1)
+                { 
                     frame++;
                     OnFrameCompleted();
 
@@ -153,33 +178,123 @@ namespace AxEmu.NES
                     {
                         system.cpu.SetNMI();
                     }
-
-                    // TODO: REMOVE!!!
-                    //Thread.Sleep(7);
                 }
 
-                if (scanline == VBlankLine && x == 3)
+                if (scanline == VBlankLine && scanX == 3)
                     dontVBlank = false;
 
-                if (scanline == 261 && x == 1)
+                if (scanline == 261 && scanX == 1)
                 {
                     vblank = false;
                     spriteZeroHit = false;
-
-                    if (scrollX != 0 || scrollY != 0)
-                    {
-                        Console.WriteLine("ayy");
-                    }
                 }
 
-                if (x == 339 && scanline == 261 && renderingEnabled && !oddEvenFlag)
+                if (scanX == 339 && scanline == 261 && renderingEnabled && !oddEvenFlag)
                     clock = 0;
 
-                if (x == 340 && scanline == 261)
-                    clock = 0;
-
-                oddEvenFlag = !oddEvenFlag;
+                if (scanX == 340 && scanline == 261)
+                    oddEvenFlag = !oddEvenFlag;
             }
+        }
+
+        private void incrementXCoarse()
+        {
+            // https://www.nesdev.org/wiki/PPU_scrolling#Coarse_X_increment
+            //
+            // if ((v & 0x001F) == 31) // if coarse X == 31
+            //   v &= ~0x001F          // coarse X = 0
+            //   v ^= 0x0400           // switch horizontal nametable
+            // else
+            //   v += 1                // increment coarse X
+            //
+
+            // Make sure we get our bitwise logic correct
+            // Don't want our ands to think we're signed, etc.
+            ulong v = reg.v;
+
+            if ((v & 0x001f) == 0x001f)
+            {
+                // if v is at 0x1f (31) we wrap
+                v &= 0xFFE0;
+                v ^= 0x0400; // switch hori nametable
+            }
+            else
+                v++;
+
+            reg.v = (ushort)v;
+        }
+
+        private void incrementY()
+        {
+            // https://www.nesdev.org/wiki/PPU_scrolling#Y_increment
+            //
+            // if ((v & 0x7000) != 0x7000)        // if fine Y < 7
+            //   v += 0x1000                      // increment fine Y
+            // else
+            //   v &= ~0x7000                     // fine Y = 0
+            //   int y = (v & 0x03E0) >> 5        // let y = coarse Y
+            //   if (y == 29)
+            //     y = 0                          // coarse Y = 0
+            //     v ^= 0x0800                    // switch vertical nametable
+            //   else if (y == 31)
+            //     y = 0                          // coarse Y = 0, nametable not switched
+            //   else
+            //     y += 1                         // increment coarse Y
+            //   v = (v & ~0x03E0) | (y << 5)     // put coarse Y back into v
+            //
+
+            // Make sure we get our bitwise logic correct
+            // Don't want our ands to think we're signed, etc.
+            ulong orv = reg.v;
+
+            if ((orv & 0x7000) != 0x7000) // cy < 7
+                orv += 0x1000;            // inc cy
+            else
+            {
+                orv &= 0x8FFF;
+                ushort y = (ushort)((orv & 0x03E0) >> 5);
+                if (y == 0x1D)
+                {
+                    y = 0;           // wrap y
+                    orv ^= 0x0800; // switch vertical nametable
+                }
+                else if (y == 0x1F)
+                    y = 0;
+                else
+                    y++;
+
+                orv = (orv & 0xFC1F) | (ushort)(y << 5);
+            }
+
+            reg.v = (ushort)orv;
+        }
+
+        private void incrementV()
+        {
+            if ((ShowBackground || ShowSprites) && (scanline < 240 || scanline == 261))
+            {
+                //incrementXCoarse();
+                //incrementY();
+            }
+            else
+            {
+                reg.v += VRAMAddrInc;
+            }
+        }
+
+        private byte ReadVRAM(ushort addr)
+        {
+            return VRAM[addr - 0x2000];
+        }
+
+        private byte ReadVRAM(ulong addr)
+        {
+            return VRAM[addr - 0x2000];
+        }
+
+        private void WriteVRAM(ushort addr, byte value)
+        {
+            VRAM[addr - 0x2000] = value;
         }
 
         private byte StatusByte()
@@ -193,9 +308,9 @@ namespace AxEmu.NES
                 status |= 0x40;
 
             vblank = false;
-            writeAddrUpper = true;
+            reg.w = false;
 
-            if (scanline == 241 && (x >= 1 || x <= 3))
+            if (scanline == 241 && (scanX >= 1 || scanX <= 3))
                 dontVBlank = true;
 
             return status;
@@ -203,14 +318,10 @@ namespace AxEmu.NES
 
         private void WriteCtrl(byte value)
         {
-            BaseTableAddr = (value & 0x3) switch
-            {
-                0x0 => 0x2000,
-                0x1 => 0x2400,
-                0x2 => 0x2800,
-                0x3 => 0x2C00,
-                _   => 0x2000
-            };
+            // Set Base Table Addr value in t register
+            var gh = (value & 0x3);
+            reg.t &= 0xF3FF;
+            reg.t |= (ushort)(gh << 0xA);
 
             VRAMAddrInc       = (value & 0x04) == 0x04 ? (ushort)0x0020   : (ushort)0x0001;
             SpriteTableAddr   = (value & 0x08) == 0x08 ? (ushort)0x1000   : (ushort)0x0000;
@@ -246,21 +357,58 @@ namespace AxEmu.NES
             EmphasizeRed           = (value & 0x20) == 0x20;
             EmphasizeGreen         = (value & 0x40) == 0x40;
             EmphasizeBlue          = (value & 0x80) == 0x80;
+
+            renderingEnabled = ShowBackground || ShowSprites;
         }
 
         private void WriteAddr(byte value)
         {
-            if (writeAddrUpper)
-                Addr = (ushort)(value << 8);
+            if (reg.w == false)
+            {
+                var lower = value & 0x003F;
+                reg.t &= 0x00FF;
+                reg.t |= (ushort)(lower << 8);
+                reg.w = true;
+            }
             else
-                Addr |= value;
+            {
+                reg.t &= 0xFF00;
+                reg.t |= value;
 
-            writeAddrUpper = !writeAddrUpper;
+                // Here we actually update the VRAM address (v) with the buffer reg (t)
+                reg.v = reg.t;
 
-            // Reset scroll as on hardware these share a register
-            nextScrollX = 0;
-            nextScrollY = 0;
-            scrollingX = true;
+                reg.w = false;
+            }
+        }
+
+        private void WriteScroll(byte value)
+        {
+            // Here we split the given scroll byte into the upper 5 and lower 3 bits.
+            // Upper5 corresponds to ABCDE
+            // Lower3 corresponds to FGH
+            // https://www.nesdev.org/wiki/PPU_scrolling#$2005_first_write_(w_is_0)
+
+            var low3 = (ushort)(value & 0x7);
+            var upper5 = (ushort)(value >> 3);
+
+            if (reg.w == false)
+            {
+                reg.t &= 0xFFE0;
+                reg.t |= upper5;
+
+                reg.x = (byte)low3;
+
+                reg.w = true;
+            }
+            else
+            {
+                reg.t &= 0x0C1F;
+                reg.t |= (ushort)(low3 << 12);
+                reg.t |= (ushort)(upper5 << 5);
+
+                reg.w = false;
+            }
         }
 
         private byte readBuffer = 0;
@@ -275,7 +423,7 @@ namespace AxEmu.NES
         {
             byte ret = 0;
 
-            var address = MirrorAddress(Addr);
+            var address = MirrorAddress(reg.v);
 
             if (address < 0x1000)
             {
@@ -287,20 +435,20 @@ namespace AxEmu.NES
             }
             else if (address < 0x3EFF)
             {
-                ret = BufferedRead(VRAM[address - 0x2000]);
+                ret = BufferedRead(ReadVRAM(address));
             }
             else if (address < 0x4000)
             {
-                ret = VRAM[address - 0x2000];
+                ret = ReadVRAM(address);
             }
 
-            Addr += VRAMAddrInc;
+            incrementV();
             return ret;
         }
 
         private void WriteAddrValue(byte value)
         {
-            var address = MirrorAddress(Addr);
+            var address = MirrorAddress(reg.v);
 
             if (address < 0x1000)
             {
@@ -312,20 +460,10 @@ namespace AxEmu.NES
             }
             else if (address < 0x4000)
             {
-                VRAM[address - 0x2000] = value;
+                WriteVRAM(address, value);
             }
 
-            Addr += VRAMAddrInc;
-        }
-
-        private void WriteScroll(byte value)
-        {
-            if (scrollingX)
-                nextScrollX = value;
-            else 
-                nextScrollY = value;
-
-            scrollingX = !scrollingX;
+            incrementV();
         }
 
         internal byte Read(ushort address)
@@ -343,8 +481,6 @@ namespace AxEmu.NES
             if (address == 0x2000)
                 WriteCtrl(value);
             else if (address == 0x2001)
-                WriteMask(value);
-            else if (address == 0x2002)
                 WriteMask(value);
             else if (address == 0x2003)
                 OAMAddress = value;
@@ -369,22 +505,22 @@ namespace AxEmu.NES
 
         private Color lookupBGPalette(byte paletteIndex)
         {
-            var p = VRAM[0x1f00 + paletteIndex];
+            var p = ReadVRAM((ushort)(0x3f00 + paletteIndex));
             return lookupColour(p);
         }
 
         private Color lookupSpritePalette(byte paletteIndex)
         {
-            var addr = paletteIndex switch
+            ushort addr = paletteIndex switch
             {
-                0x0 => 0x1f00,
-                0x4 => 0x1f04,
-                0x8 => 0x1f08,
-                0xc => 0x1f0c,
-                _ => 0x1f10 + paletteIndex,
+                0x0 => 0x3f00,
+                0x4 => 0x3f04,
+                0x8 => 0x3f08,
+                0xc => 0x3f0c,
+                _   => (ushort)(0x3f10 + paletteIndex),
             };
 
-            var p = VRAM[addr];
+            var p = ReadVRAM(addr);
             return lookupColour(p);
         }
 
@@ -502,14 +638,14 @@ namespace AxEmu.NES
         {
             return sprite.y == 0
                 || sprite.y >  RenderHeight - 1
-                ||        x <  sprite.x
-                ||        x >= (ulong)(sprite.x + 8)
-                ||        x <  8 && !ShowSpritesLeftmost;
+                ||        scanX <  sprite.x
+                ||        scanX >= (ulong)(sprite.x + 8)
+                ||        scanX <  8 && !ShowSpritesLeftmost;
         }
 
         internal void renderPixelSprite(bool solidBG)
         {
-            if (x >= RenderWidth || scanline >= RenderHeight)
+            if (scanX >= RenderWidth || scanline >= RenderHeight)
                 return;
 
             bool tallSprites = CurrentSpriteSize == SpriteSize.s8x16;
@@ -532,7 +668,7 @@ namespace AxEmu.NES
                 var flipY    = (sprite.attr & 0x80) == 0x80;
 
                 // Figure out which pixel in the sprite we're rendering
-                byte pixelX = (byte)(x - sprite.x);
+                byte pixelX = (byte)(scanX - sprite.x);
                 byte pixelY = (byte)(scanline - sprite.y);
 
                 // Find out what table addr to use
@@ -571,10 +707,10 @@ namespace AxEmu.NES
                 {
                     // Check if spriteZeroHit should be set
                     if(sprite.isSpriteZero
-                        && (x > 8 || ShowSpritesLeftmost)
+                        && (scanX > 8 || ShowSpritesLeftmost)
                         && (!solidBG)
                         && (!spriteZeroHit)
-                        && (x != 255)
+                        && (scanX != 255)
                       )
                     {
                         spriteZeroHit = true;
@@ -587,9 +723,9 @@ namespace AxEmu.NES
                         var pixelColour = lookupSpritePalette((byte)paletteIndex);
 
                         // Store in our BGR buffer
-                        Bgr24Bitmap[(x + scanline * RenderWidth) * 3 + 0] = pixelColour.B;
-                        Bgr24Bitmap[(x + scanline * RenderWidth) * 3 + 1] = pixelColour.G;
-                        Bgr24Bitmap[(x + scanline * RenderWidth) * 3 + 2] = pixelColour.R;
+                        Bgr24Bitmap[(scanX + scanline * RenderWidth) * 3 + 0] = pixelColour.B;
+                        Bgr24Bitmap[(scanX + scanline * RenderWidth) * 3 + 1] = pixelColour.G;
+                        Bgr24Bitmap[(scanX + scanline * RenderWidth) * 3 + 2] = pixelColour.R;
                     }
                 }
             }
@@ -597,13 +733,24 @@ namespace AxEmu.NES
 
         internal bool renderPixelBackground()
         {
-            if (x >= RenderWidth || scanline >= RenderHeight)
+            if (scanX >= RenderWidth || scanline >= RenderHeight)
                 return false;
 
             // Apply scrolling
-            var ox = x + scrollX;
-            var oy = scanline + scrollY;
-            var bta = BaseTableAddr;
+            var ox = scanX + scrollX;
+            ulong oy = scanline;
+
+            var baseIndex = (ushort)((reg.v >> 10) & 0x3);
+            ushort bta = baseIndex switch
+            {
+                0 => 0x2000,
+                1 => 0x2400,
+                2 => 0x2800,
+                3 => 0x2c00,
+                _ => 0x0000
+            };
+
+
 
             // Wrap around and move to the next tileset
             if (ox >= RenderWidth)
@@ -622,13 +769,13 @@ namespace AxEmu.NES
             // Lookup tile data
             var tileX = ox / 8;
             var tileY = oy / 8;
-            var ntL = (bta - 0x2000ul) + tileY * 32 + tileX;
-            var nametableEntry = VRAM[ntL];
+            var ntL = bta + tileY * 32 + tileX;
+            var nametableEntry = ReadVRAM(ntL);
 
             // Lookup attr data
             var attrX = tileX / 4;
             var attrY = tileY / 4;
-            var attr = VRAM[(bta - 0x2000ul) + AttrTableAddr + attrY * 8 + attrX];
+            var attr = ReadVRAM(bta + AttrTableAddr + attrY * 8 + attrX);
 
             // Lookup quadrant data
             var quadX = (tileX % 4) / 2;
@@ -659,9 +806,9 @@ namespace AxEmu.NES
             }
 
             // Store in our BGR buffer
-            Bgr24Bitmap[(x + scanline * RenderWidth) * 3 + 0] = pixelColour.B;
-            Bgr24Bitmap[(x + scanline * RenderWidth) * 3 + 1] = pixelColour.G;
-            Bgr24Bitmap[(x + scanline * RenderWidth) * 3 + 2] = pixelColour.R;
+            Bgr24Bitmap[(scanX + scanline * RenderWidth) * 3 + 0] = pixelColour.B;
+            Bgr24Bitmap[(scanX + scanline * RenderWidth) * 3 + 1] = pixelColour.G;
+            Bgr24Bitmap[(scanX + scanline * RenderWidth) * 3 + 2] = pixelColour.R;
 
             return solid;
         }
