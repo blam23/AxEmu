@@ -76,7 +76,6 @@ namespace AxEmu.NES
         {
             var ppu = system.ppu;
             return $@"PPU:
-  BaseTableAddr   : {ppu.BaseTableAddr:X4}
   VRAMAddrInc     : {ppu.VRAMAddrInc:X4}
   SpriteTableAddr : {ppu.SpriteTableAddr:X4}
   BackTableAddr   : {ppu.BackTableAddr:X4}
