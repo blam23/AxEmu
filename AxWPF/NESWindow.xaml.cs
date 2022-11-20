@@ -1,4 +1,5 @@
-﻿using System.IO;
+﻿using Microsoft.Win32;
+using System.IO;
 using System.Threading;
 using System.Windows;
 using System.Windows.Media;
@@ -13,11 +14,11 @@ namespace AxWPF
     {
         readonly WriteableBitmap bitmap;
         private readonly AxEmu.NES.System nes;
-        private readonly Thread emuThread;
+        private Thread? emuThread;
         int frames = 0;
 
         private ManualResetEvent frameWaitEvent = new(false);
-        private bool stopOnNextFrame = true;
+        private bool stopOnNextFrame = false;
         private bool logging = false;
         private bool logFromNextKeypress = true;
         private StreamWriter? logWriteStream;
@@ -29,28 +30,16 @@ namespace AxWPF
         {
             InitializeComponent();
 
-            //nes = new("D:\\Test\\NES\\zelda.nes");
-            nes = new("D:\\Test\\NES\\mario.nes");
-            //nes = new("D:\\Test\\NES\\kirby.nes");
-            //nes = new("D:\\Test\\NES\\nes-test-roms-master\\other\\flame.nes");
-            //nes = new("D:\\Test\\NES\\nes-test-roms-master\\other\\MOTION.NES");
-            //nes = new("D:\\Test\\NES\\nes-test-roms-master\\other\\GENIE.NES");
-            //nes = new("D:\\Test\\NES\\nes-test-roms-master\\other\\firefly.nes");
-            //nes = new("D:\\Test\\NES\\nes-test-roms-master\\other\\nestest.nes");
-            //nes = new("D:\\Test\\NES\\nes-test-roms-master\\scanline\\scanline.nes");
-            //nes = new("D:\\Test\\NES\\nes-test-roms-master\\spritecans-2011\\spritecans.nes");
-            //nes = new("D:\\Test\\NES\\nes-test-roms-master\\stress\\NEStress.NES");
+            //nes = new("D:\\Test\\NES\\mario.nes");
+            nes = new("D:\\Test\\NES\\nes-test-roms-master\\stress\\NEStress.NES");
 
             // Technically this can be a much lower bit image, but we might want ot apply some effects n stuff
             bitmap = new(
                 (int)AxEmu.NES.PPU.RenderWidth, 
-                (int)AxEmu.NES.PPU.RenderHeight, 
+                (int)AxEmu.NES.PPU.RenderHeight - 8, 
                 96, 96, PixelFormats.Bgr24, null);
 
             image.Source = bitmap;
-
-            emuThread = new Thread(() => nes.Run());
-            emuThread.Start();
 
             nes.ppu.FrameCompleted += DispatchFrame;
 
@@ -71,7 +60,8 @@ namespace AxWPF
             //console.Show();
             //nes.debug.SetLogger(console);
 
-            Show();
+            // Start playing immediately
+            Loaded += (_, _) => StartEmulator(false);
         }
 
         private void NESWindow_Closing(object? sender, System.ComponentModel.CancelEventArgs e)
@@ -103,10 +93,10 @@ namespace AxWPF
             Application.Current.Dispatcher.BeginInvoke(
                 () => bitmap.WritePixels
                 (
-                    new Int32Rect(0, 0, bitmap.PixelWidth, bitmap.PixelHeight),
+                    new Int32Rect(0, 8, bitmap.PixelWidth, bitmap.PixelHeight - 8),
                     frame,
                     3 * bitmap.PixelWidth,
-                    0
+                    24 * bitmap.PixelWidth
                 )
             );
         }
@@ -248,6 +238,40 @@ namespace AxWPF
         private void LogFromNextKeypress_Clicked(object sender, RoutedEventArgs e)
         {
             logFromNextKeypress = true;
+        }
+
+        private void StopEmulator()
+        {
+            nes.Stop();
+            frameWaitEvent.Set(); // make sure system isn't waiting for event
+            emuThread?.Join();     // block until system stops
+        }
+
+        private void StartEmulator(bool pauseOnStart = false)
+        {
+            if (pauseOnStart)
+                frameWaitEvent.Reset();
+            else
+                frameWaitEvent.Set();
+
+            emuThread = new Thread(() => nes.Run());
+            emuThread.Start();
+        }
+
+        private void Open_Click(object sender, RoutedEventArgs e)
+        {
+            StopEmulator();
+
+            var ofd = new OpenFileDialog
+            {
+                Filter = "NES ROM File (*.nes)|*.nes|All files (*.*)|*.*"
+            };
+            if (ofd.ShowDialog() == true)
+            {
+                nes.LoadROM(ofd.FileName);
+            }
+
+            StartEmulator(false);
         }
     }
 }

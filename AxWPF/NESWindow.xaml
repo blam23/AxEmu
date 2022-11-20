@@ -6,21 +6,28 @@
         mc:Ignorable="d"
         Title="NES"
         Height="708"
-        Width="480"
+        Width="750"
         KeyDown="Window_KeyDown"
         KeyUp="Window_KeyUp"
         >
-    <Grid>
-        <Image x:Name="image" 
+    <Grid Background="White">
+        <Grid Background="Black" Margin="0,0,137,0">
+            <!--<Grid.Effect>
+                <BlurEffect RenderingBias="Quality" Radius="3"/>
+            </Grid.Effect>-->
+            <Image x:Name="image" 
+               Width="512"
+               Height="480"
                RenderOptions.BitmapScalingMode="NearestNeighbor"
-               Height="508"
-               Width="480" 
-               Margin="0,0,0,0" 
-               VerticalAlignment="Top"
+               Margin="5,5,5,5"
                />
-        <Button Margin="5,0,5,102"  Height="28" VerticalAlignment="Bottom" Click="LogFromNextKeypress_Clicked">Log From Next Keypress</Button>
-        <Button Margin="5,0,5,70" Height="28" VerticalAlignment="Bottom" Click="Run_Click" >Run</Button>
-        <Button Margin="5,0,5,38" Height="28" VerticalAlignment="Bottom" Click="Pause_Click" >Pause</Button>
-        <Button Margin="5,0,5,5"  Height="28" VerticalAlignment="Bottom" Click="RunFrame_Click">Run to Next Frame</Button>
+        </Grid>
+        <Grid Background="Black" Width="137" HorizontalAlignment="Right">
+            <Button Margin="5,5,5,5"  Height="28" VerticalAlignment="Bottom" Click="LogFromNextKeypress_Clicked">Log On Next Keypress</Button>
+            <Button Margin="5,5,5,0" Height="28" VerticalAlignment="Top" Click="Run_Click" >Run</Button>
+            <Button Margin="5,38,5,0" Height="28" VerticalAlignment="Top" Click="Pause_Click" >Pause</Button>
+            <Button Margin="5,71,5,0"  Height="28" VerticalAlignment="Top" Click="RunFrame_Click">Next Frame</Button>
+            <Button Margin="5,104,5,0"  Height="28" VerticalAlignment="Top" Click="Open_Click"  Content="Open"/>
+        </Grid>
     </Grid>
 </Window>
