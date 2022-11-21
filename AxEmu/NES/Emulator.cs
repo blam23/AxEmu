@@ -2,16 +2,18 @@
 
 namespace AxEmu.NES
 {
-    public class System
+    public class Emulator
     {
         // Components
-        public Cart cart = new();
-        public CPU cpu;
-        public PPU ppu;
-        public APU apu;
+        internal Cart cart = new();
+        internal CPU cpu;
+        internal PPU ppu;
+        internal APU apu;
+        internal MemoryBus cpuBus;
+
+        // Inputs
         public JoyPad joyPad1;
         public JoyPad joyPad2;
-        public IMemory memory;
 
         // Helpers
         public Debugger debug;
@@ -40,16 +42,16 @@ namespace AxEmu.NES
             FrameCompleted?.Invoke(bitmap);
         }
 
-        public System(string ROMFileLocation)
+        public Emulator(string ROMFileLocation)
             : this()
         {
             LoadROM(ROMFileLocation);
         }
 
-        public System()
+        public Emulator()
         {
-            memory = new MemoryMapper(this);
-            cpu = new CPU(this);
+            cpuBus = new CPUMemoryBus(this);
+            cpu = new CPU(cpuBus);
             ppu = new PPU(this);
             apu = new APU(this);
             joyPad1 = new JoyPad(this);
@@ -57,10 +59,10 @@ namespace AxEmu.NES
             debug = new Debugger(this);
         }
 
-        public System(IMemory memory)
+        public Emulator(MemoryBus memory)
         {
-            this.memory = memory;
-            cpu = new CPU(this);
+            cpuBus = memory;
+            cpu = new CPU(memory);
             ppu = new PPU(this);
             apu = new APU(this);
             joyPad1 = new JoyPad(this);
@@ -90,12 +92,12 @@ namespace AxEmu.NES
             cpu.Init();
             ppu.Init();
 
-            ppu.FrameCompleted += (frame) => OnFrameCompleted(frame);
+            ppu.FrameCompleted += OnFrameCompleted;
         }
 
         public string GetInstr()
         {
-            var nextInstr = memory.Read(cpu.pc);
+            var nextInstr = cpu.bus.Read(cpu.pc);
             return Debug.GetOpcodeName(this, nextInstr);
         }
 
@@ -108,16 +110,16 @@ namespace AxEmu.NES
                 // TODO: Move to debugger
                 if (consoleDebug)
                 {
-                    Console.WriteLine($"{cpu.ToSmallString()} | {GetInstr()}");
+                    System.Console.WriteLine($"{cpu.ToSmallString()} | {GetInstr()}");
                 }
 
                 // TODO: Move to debugger
                 if (waitForKey)
                 {
-                    var key = Console.ReadKey(true);
+                    var key = System.Console.ReadKey(true);
 
                     if (key.Key == ConsoleKey.P)
-                        Console.WriteLine(Debug.PPUState(this));
+                        System.Console.WriteLine(Debug.PPUState(this));
 
                     if (key.Key == ConsoleKey.Escape)
                         break;

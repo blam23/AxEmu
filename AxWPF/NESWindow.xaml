@@ -16,7 +16,7 @@
                 <BlurEffect RenderingBias="Quality" Radius="3"/>
             </Grid.Effect>-->
             <Image x:Name="image" 
-               Width="512"
+               Width="513"
                Height="480"
                RenderOptions.BitmapScalingMode="NearestNeighbor"
                Margin="5,5,5,5"

@@ -13,7 +13,7 @@ namespace AxWPF
     public partial class NESWindow : Window
     {
         readonly WriteableBitmap bitmap;
-        private readonly AxEmu.NES.System nes;
+        private AxEmu.NES.Emulator nes;
         private Thread? emuThread;
         int frames = 0;
 
@@ -25,13 +25,15 @@ namespace AxWPF
 
         private Timer fpsTimer;
         WPFConsole console;
+        Debug_PPU ppuDebugWindow;
 
         public NESWindow()
         {
             InitializeComponent();
 
-            //nes = new("D:\\Test\\NES\\mario.nes");
-            nes = new("D:\\Test\\NES\\nes-test-roms-master\\stress\\NEStress.NES");
+            nes = new("D:\\Test\\NES\\mario.nes");
+            //nes = new("D:\\Test\\NES\\tetris.nes");
+            //nes = new("D:\\Test\\NES\\nes-test-roms-master\\stress\\NEStress.NES");
 
             // Technically this can be a much lower bit image, but we might want ot apply some effects n stuff
             bitmap = new(
@@ -41,7 +43,7 @@ namespace AxWPF
 
             image.Source = bitmap;
 
-            nes.ppu.FrameCompleted += DispatchFrame;
+            nes.FrameCompleted += DispatchFrame;
 
             nes.SetCycleWaitEvent(frameWaitEvent);
 
@@ -56,17 +58,20 @@ namespace AxWPF
 
             Closing += NESWindow_Closing;
 
-            console = new WPFConsole();
+            //console = new WPFConsole();
             //console.Show();
             //nes.debug.SetLogger(console);
 
-            // Start playing immediately
-            Loaded += (_, _) => StartEmulator(false);
+            ppuDebugWindow = new Debug_PPU();
+            ppuDebugWindow.SetNes(nes);
+            ppuDebugWindow.Show();
+
+            Loaded += (_, _) => StartEmulator(true);
         }
 
         private void NESWindow_Closing(object? sender, System.ComponentModel.CancelEventArgs e)
         {
-            nes.ppu.FrameCompleted -= DispatchFrame;
+            nes.FrameCompleted -= DispatchFrame;
             fpsTimer.Dispose();
 
             if (logging)
@@ -135,11 +140,11 @@ namespace AxWPF
             logWriteStream?.Close();
         }
 
-        private void LogState(AxEmu.NES.System system)
+        private void LogState(AxEmu.NES.Emulator system)
         {
             try
             {
-                logWriteStream?.WriteLine($"{system.cpu.ToSmallString()} | {system.GetInstr()}");
+                //logWriteStream?.WriteLine($"{system.cpu.ToSmallString()} | {system.GetInstr()}");
                 logWriteStream?.Flush();
             } catch { }
         }
@@ -261,6 +266,7 @@ namespace AxWPF
         private void Open_Click(object sender, RoutedEventArgs e)
         {
             StopEmulator();
+            //nes = new AxEmu.NES.Emulator();
 
             var ofd = new OpenFileDialog
             {

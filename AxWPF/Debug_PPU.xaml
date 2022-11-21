@@ -1,0 +1,14 @@
+﻿<Window x:Class="AxWPF.Debug_PPU"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+        xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+        xmlns:local="clr-namespace:AxWPF"
+        mc:Ignorable="d"
+        Background="Black"
+        Title="Debug_PPU" Height="450" Width="556" ResizeMode="NoResize">
+    <Grid>
+        <Image x:Name="PTL" RenderOptions.BitmapScalingMode="NearestNeighbor" HorizontalAlignment="Left" Width="256" Height="256" Margin="10,10,0,0" VerticalAlignment="Top"/>
+        <Image x:Name="PTR" RenderOptions.BitmapScalingMode="NearestNeighbor" HorizontalAlignment="Right" Width="256" Height="256" Margin="10,10,10,0" VerticalAlignment="Top"/>
+    </Grid>
+</Window>

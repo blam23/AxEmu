@@ -1,7 +1,7 @@
 ﻿using AxEmu.NES;
 
 // Load ROM
-var testNes = new AxEmu.NES.System("D:\\Test\\NES\\nestest.nes");
+var testNes = new AxEmu.NES.Emulator("D:\\Test\\NES\\nestest.nes");
 
 // Initialise Display
 var display = new Display(testNes);

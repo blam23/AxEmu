@@ -4,7 +4,7 @@ namespace AxEmu.NES
 {
     public class APU
     {
-        private System system;
+        private Emulator system;
 
         internal IChannel[] channels;
         internal PWM pulse1;
@@ -27,7 +27,7 @@ namespace AxEmu.NES
             }
         }
 
-        public APU(System system)
+        public APU(Emulator system)
         {
             this.system = system;
 
@@ -38,12 +38,12 @@ namespace AxEmu.NES
             };
         }
 
-        internal byte read(ushort address)
+        internal byte Read(ushort address)
         {
             return 0;
         }
 
-        internal void write(ushort address, byte value)
+        internal void Write(ushort address, byte value)
         {
             switch (address)
             {

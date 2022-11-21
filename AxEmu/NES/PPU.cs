@@ -4,7 +4,7 @@ namespace AxEmu.NES
 {
     public class PPU
     {
-        private System system;
+        private Emulator system;
 
         internal enum SpriteSize
         {
@@ -90,11 +90,9 @@ namespace AxEmu.NES
         internal bool EmphasizeBlue          = false;
 
         // Data
-        internal readonly byte[] OAM  = new byte[0x100];
-        internal readonly byte[] VRAM = new byte[0x2000];
-        internal byte[] VRAMPage0000  = new byte[0x1000];
-        internal byte[] VRAMPage1000  = new byte[0x1000];
+        internal PPUMemoryBus mem;
         internal byte[] Bgr24Bitmap   = new byte[RenderWidth * RenderHeight * 3];
+        internal readonly byte[] OAM  = new byte[0x100];
 
         // Events
         public delegate void PPUFrameEvent(byte[] bitmap);
@@ -107,17 +105,17 @@ namespace AxEmu.NES
 
         // Registers
         bool writeAddrUpper = true;
-        internal ushort Addr = 0;
+        internal ushort addr = 0;
 
-        public PPU(System system)
+        public PPU(Emulator system)
         {
             this.system = system;
+            mem = new PPUMemoryBus(system);
         }
 
         public void Init()
         {
-            VRAMPage0000 = system.cart.chrRomPages[0];
-            VRAMPage1000 = system.cart.chrRomPages[^1];
+            mem.Init();
         }
 
         public void Tick(ulong cycles)
@@ -129,7 +127,12 @@ namespace AxEmu.NES
 
                 // Start of new line - setup sprite data.
                 if (x == 320 && scanline >= 0 && scanline < RenderHeight)
+                {
                     SetupSpritesOnNextLine();
+                }
+
+                scrollX = nextScrollX;
+                scrollY = nextScrollY;
 
                 bool solidBG = false;
                 if (ShowBackground)
@@ -139,9 +142,6 @@ namespace AxEmu.NES
                     renderPixelSprite(solidBG);
 
                 clock++;
-
-                scrollX = nextScrollX;
-                scrollY = nextScrollY;
 
                 if (scanline == VBlankLine && x == 1)
                 {
@@ -165,11 +165,6 @@ namespace AxEmu.NES
                 {
                     vblank = false;
                     spriteZeroHit = false;
-
-                    if (scrollX != 0 || scrollY != 0)
-                    {
-                        Console.WriteLine("ayy");
-                    }
                 }
 
                 if (x == 339 && scanline == 261 && renderingEnabled && !oddEvenFlag)
@@ -220,21 +215,7 @@ namespace AxEmu.NES
             NMIOnVBlank       = (value & 0x80) == 0x80;
         }
 
-        private static readonly Dictionary<ushort, ushort> addressMirrors = new()
-        {
-            { 0x3F10, 0x3F00 },
-            { 0x3F14, 0x3F04 },
-            { 0x3F18, 0x3F08 },
-            { 0x3F1C, 0x3F0C },
-        };
-
-        private static ushort MirrorAddress(ushort address)
-        {
-            if (addressMirrors.TryGetValue(address, out var fixedAddress))
-                return fixedAddress;
-
-            return address;
-        }
+        
 
         private void WriteMask(byte value)
         {
@@ -251,9 +232,9 @@ namespace AxEmu.NES
         private void WriteAddr(byte value)
         {
             if (writeAddrUpper)
-                Addr = (ushort)(value << 8);
+                addr = (ushort)(value << 8);
             else
-                Addr |= value;
+                addr |= value;
 
             writeAddrUpper = !writeAddrUpper;
 
@@ -273,49 +254,21 @@ namespace AxEmu.NES
 
         private byte ReadAddrValue()
         {
-            byte ret = 0;
+            byte ret;
 
-            var address = MirrorAddress(Addr);
+            if (addr < 0x3EFF)
+                ret = BufferedRead(mem.Read(addr));
+            else
+                ret = mem.Read(addr);
 
-            if (address < 0x1000)
-            {
-                ret = BufferedRead(VRAMPage0000[address]);
-            }
-            else if (address < 0x2000)
-            {
-                ret = BufferedRead(VRAMPage1000[address - 0x1000]);
-            }
-            else if (address < 0x3EFF)
-            {
-                ret = BufferedRead(VRAM[address - 0x2000]);
-            }
-            else if (address < 0x4000)
-            {
-                ret = VRAM[address - 0x2000];
-            }
-
-            Addr += VRAMAddrInc;
+            addr += VRAMAddrInc;
             return ret;
         }
 
         private void WriteAddrValue(byte value)
         {
-            var address = MirrorAddress(Addr);
-
-            if (address < 0x1000)
-            {
-                VRAMPage0000[address] = value;
-            }
-            else if (address < 0x2000)
-            {
-                VRAMPage1000[address - 0x1000] = value;
-            }
-            else if (address < 0x4000)
-            {
-                VRAM[address - 0x2000] = value;
-            }
-
-            Addr += VRAMAddrInc;
+            mem.Write(addr, value);
+            addr += VRAMAddrInc;
         }
 
         private void WriteScroll(byte value)
@@ -340,22 +293,28 @@ namespace AxEmu.NES
 
         internal void Write(ushort address, byte value)
         {
-            if (address == 0x2000)
-                WriteCtrl(value);
-            else if (address == 0x2001)
-                WriteMask(value);
-            else if (address == 0x2002)
-                WriteMask(value);
-            else if (address == 0x2003)
-                OAMAddress = value;
-            else if (address == 0x2004)
-                WriteOAM(value);
-            else if (address == 0x2005)
-                WriteScroll(value);
-            else if (address == 0x2006)
-                WriteAddr(value);
-            else if (address == 0x2007)
-                WriteAddrValue(value);
+            // Wrap access - 0x2000 == 0x2008 == 0x2010 == 0x2018 == ... == 0x3FF8
+            var instr = address & 0x000F;
+
+            switch(instr)
+            {
+                case 0x0: WriteCtrl(value); break;
+                case 0x1: WriteMask(value); break;
+                case 0x2: WriteMask(value); break;
+                case 0x3: WriteOAMAddr(value); break;
+                case 0x4: WriteOAM(value); break;
+                case 0x5: WriteScroll(value); break;
+                case 0x6: WriteAddr(value); break;
+                case 0x7: WriteAddrValue(value); break;
+
+                default:
+                    throw new Exception($"Unknown PPU instruction: {address}");
+            }
+        }
+
+        private void WriteOAMAddr(byte value)
+        {
+            OAMAddress = value;
         }
 
         private void WriteOAM(byte value)
@@ -367,24 +326,24 @@ namespace AxEmu.NES
             OAMAddress++;
         }
 
-        private Color lookupBGPalette(byte paletteIndex)
+        internal Color lookupBGPalette(byte paletteIndex)
         {
-            var p = VRAM[0x1f00 + paletteIndex];
+            var p = mem.Read((ushort)(0x3F00 + paletteIndex));
             return lookupColour(p);
         }
 
-        private Color lookupSpritePalette(byte paletteIndex)
+        internal Color lookupSpritePalette(byte paletteIndex)
         {
-            var addr = paletteIndex switch
+            ushort addr = paletteIndex switch
             {
-                0x0 => 0x1f00,
-                0x4 => 0x1f04,
-                0x8 => 0x1f08,
-                0xc => 0x1f0c,
-                _ => 0x1f10 + paletteIndex,
+                0x0 => 0x3F00,
+                0x4 => 0x3F04,
+                0x8 => 0x3F08,
+                0xc => 0x3F0C,
+                _ => (ushort)(0x3F10 + paletteIndex),
             };
 
-            var p = VRAM[addr];
+            var p = mem.Read(addr);
             return lookupColour(p);
         }
 
@@ -561,10 +520,12 @@ namespace AxEmu.NES
                 // Calc colour address
                 ushort address = (ushort)(table + tile + pixelY);
 
-                var tbl = address >= 0x1000 ? VRAMPage1000 : VRAMPage0000;
-                var upperBit = (tbl[(address + 8) % 0x1000] & (0x80u >> pixelX)) >> (7 - pixelX);
-                var lowerBit = (tbl[address % 0x1000] & (0x80ul >> pixelX)) >> (7 - pixelX);
+                //var tbl = address >= 0x1000 ? VRAMPage1000 : VRAMPage0000;
+                //var upperBit = (tbl[(address + 8) % 0x1000] & (0x80u >> pixelX)) >> (7 - pixelX);
+                //var lowerBit = (tbl[address % 0x1000] & (0x80ul >> pixelX)) >> (7 - pixelX);
 
+                byte upperBit = (byte)((mem.Read((ushort)(address + 8)) & (0x80u >> pixelX)) >> (7 - pixelX));
+                byte lowerBit = (byte)((mem.Read(address)               & (0x80u >> pixelX)) >> (7 - pixelX));
                 byte colour = (byte)((upperBit << 1) | lowerBit);
                 
                 if (colour > 0)
@@ -625,13 +586,13 @@ namespace AxEmu.NES
             // Lookup tile data
             var tileX = ox / 8;
             var tileY = oy / 8;
-            var ntL = (bta - 0x2000ul) + tileY * 32 + tileX;
-            var nametableEntry = VRAM[ntL];
+            var ntL = (ushort)(bta + tileY * 32 + tileX);
+            var nametableEntry = mem.Read(ntL);
 
             // Lookup attr data
             var attrX = tileX / 4;
             var attrY = tileY / 4;
-            var attr = VRAM[(bta - 0x2000ul) + AttrTableAddr + attrY * 8 + attrX];
+            var attr = mem.Read((ushort)(bta + AttrTableAddr + attrY * 8 + attrX));
 
             // Lookup quadrant data
             var quadX = (tileX % 4) / 2;
@@ -639,11 +600,10 @@ namespace AxEmu.NES
 
             var colourBits = (attr >> (byte)((quadX * 2) + (quadY * 4))) & 0x3;
 
-            var entry = nametableEntry * 0x10 + ((int)oy % 8);
+            ushort entry = (ushort)(BackTableAddr + nametableEntry * 0x10 + ((int)oy % 8));
 
-            var tbl = BackTableAddr == 0x0000 ? VRAMPage0000: VRAMPage1000;
-            byte firstPlaneByte = tbl[entry];
-            byte secondPlaneByte = tbl[entry + 8];
+            byte firstPlaneByte = mem.Read(entry);
+            byte secondPlaneByte = mem.Read((ushort)(entry + 8));
 
             var firstPlaneBit  = (byte)((firstPlaneByte >> (byte)(7 - (ox % 8))) & 1);
             var secondPlaneBit = (byte)((secondPlaneByte >> (byte)(7 - (ox % 8))) & 1);
@@ -680,7 +640,7 @@ namespace AxEmu.NES
                 // FIXME: Remove
                 OAMAddress %= (ushort)OAM.Length;
 
-                OAM[OAMAddress] = system.memory.Read(from);
+                OAM[OAMAddress] = system.cpu.bus.Read(from);
                 OAMAddress++;
                 from++;
             }

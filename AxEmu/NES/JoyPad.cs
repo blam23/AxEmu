@@ -8,7 +8,7 @@ namespace AxEmu.NES
 {
     public class JoyPad
     {
-        internal readonly System system;
+        internal readonly Emulator system;
 
         // Controller state
         private bool up;
@@ -20,7 +20,7 @@ namespace AxEmu.NES
         private bool a;
         private bool b;
 
-        public JoyPad(System system)
+        public JoyPad(Emulator system)
         {
             this.system = system;
         }

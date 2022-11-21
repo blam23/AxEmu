@@ -1,10 +1,9 @@
 ﻿namespace AxEmu.NES
 {
-    public class CPU
+    internal class CPU
     {
         // https://www.nesdev.org/wiki/CPU
-
-        private System system;
+        public MemoryBus bus;
 
         // Interrupt vector addresses
         public const ushort NMI_VECTOR   = 0xFFFA; // NMI vector word address
@@ -115,12 +114,12 @@
         internal void Init()
         {
             SetInitialState();
-            pc = system.memory.ReadWord(RESET_VECTOR);
+            pc = bus.ReadWord(RESET_VECTOR);
         }
 
-        public CPU(System system)
+        public CPU(MemoryBus bus)
         {
-            this.system = system;
+            this.bus = bus;
         }
 
         public override string ToString()
@@ -144,7 +143,7 @@ CPU:
 
         public void Iterate()
         {
-            byte op = system.memory.Read(pc);
+            byte op = bus.Read(pc);
 
             if (opCodeActions.TryGetValue(op, out var opAction))
             {
@@ -180,7 +179,7 @@ CPU:
             PushWord(pc);
             PushStatus();
 
-            pc = system.memory.ReadWord(NMI_VECTOR);
+            pc = bus.ReadWord(NMI_VECTOR);
         }
 
         #region Op Codes
@@ -440,20 +439,20 @@ CPU:
                     return argument;
                 case Mode.ZP:
                     pc += 2;
-                    addr = system.memory.Read(argument);
+                    addr = bus.Read(argument);
                     return addr;
                 case Mode.ZPX:
                     pc += 2;
-                    return (ushort)((system.memory.Read(argument) + x) & 0xFF);
+                    return (ushort)((bus.Read(argument) + x) & 0xFF);
                 case Mode.ZPY:
                     pc += 2;
-                    return (ushort)((system.memory.Read(argument) + y) & 0xFF);
+                    return (ushort)((bus.Read(argument) + y) & 0xFF);
                 case Mode.ABS:
                     pc += 3;
-                    return system.memory.ReadWord(argument);
+                    return bus.ReadWord(argument);
                 case Mode.ABSX:
                     pc += 3;
-                    addr = system.memory.ReadWord(argument);
+                    addr = bus.ReadWord(argument);
 
                     page = addr >> 8;
                     addr += x;
@@ -466,7 +465,7 @@ CPU:
                 case Mode.ABSY:
                     pc += 3;
 
-                    addr = system.memory.ReadWord(argument);
+                    addr = bus.ReadWord(argument);
 
                     page = addr >> 8;
                     addr += y;
@@ -479,16 +478,16 @@ CPU:
                 case Mode.INDX:
                     pc += 2;
 
-                    addr = system.memory.Read(argument);
+                    addr = bus.Read(argument);
                     addr += x;
                     addr &= 0xFF;
 
-                    return system.memory.ReadWordWrapped(addr);
+                    return bus.ReadWordWrapped(addr);
                 case Mode.INDY:
                     pc += 2;
 
-                    addr = system.memory.Read(argument);
-                    addr = system.memory.ReadWordWrapped(addr);
+                    addr = bus.Read(argument);
+                    addr = bus.ReadWordWrapped(addr);
 
                     if (watchPageBoundary && ((addr & 0xFF00) != ((addr + y) & 0xFF00)))
                         clock++;
@@ -505,12 +504,12 @@ CPU:
 
         internal byte ReadNext(Mode mode, bool watchPageBoundary = false)
         {
-            return system.memory.Read(GetAddress(mode, watchPageBoundary));
+            return bus.Read(GetAddress(mode, watchPageBoundary));
         }
 
         internal void WriteNext(Mode mode, byte value, bool watchPageBoundary = false)
         {
-            system.memory.Write(GetAddress(mode, watchPageBoundary), value);
+            bus.Write(GetAddress(mode, watchPageBoundary), value);
         }
 
         private void SetNegativeAndZero(byte value)
@@ -629,11 +628,11 @@ CPU:
 
             var addr = GetAddress(mode, false);
 
-            var value = system.memory.Read(addr);
+            var value = bus.Read(addr);
             value--;
             SetNegativeAndZero(value);
 
-            system.memory.Write(addr, value);
+            bus.Write(addr, value);
         }
         private byte Inc(byte value)
         {
@@ -651,11 +650,11 @@ CPU:
 
             var addr = GetAddress(mode, false);
 
-            var value = system.memory.Read(addr);
+            var value = bus.Read(addr);
             value++;
             SetNegativeAndZero(value);
 
-            system.memory.Write(addr, value);
+            bus.Write(addr, value);
         }
 
         private byte Asl(byte value)
@@ -675,12 +674,12 @@ CPU:
 
             var addr = GetAddress(mode, false);
 
-            var value = system.memory.Read(addr);
+            var value = bus.Read(addr);
             status.Carry = (value & 0x80) == 0x80;
             value = (byte)(value << 1);
             SetNegativeAndZero(value);
 
-            system.memory.Write(addr, value);
+            bus.Write(addr, value);
         }
 
         private byte Lsr(byte value)
@@ -699,12 +698,12 @@ CPU:
             AddShiftClockTime(mode);
 
             var addr = GetAddress(mode, false);
-            var value = system.memory.Read(addr);
+            var value = bus.Read(addr);
             status.Carry = (value & 0x1) == 0x1;
             value = (byte)(value >> 1);
             SetNegativeAndZero(value);
 
-            system.memory.Write(addr, value);
+            bus.Write(addr, value);
         }
 
         private byte Rol(byte value)
@@ -726,12 +725,12 @@ CPU:
 
             var addr = GetAddress(mode, false);
 
-            var value = system.memory.Read(addr);
+            var value = bus.Read(addr);
             status.Carry = (value & 0x80) == 0x80;
             value = (byte)((value << 1) + (prevCarry ? 1 : 0));
             SetNegativeAndZero(value);
 
-            system.memory.Write(addr, value);
+            bus.Write(addr, value);
         }
 
         private byte Ror(byte value)
@@ -752,12 +751,12 @@ CPU:
             AddShiftClockTime(mode);
 
             var addr = GetAddress(mode, false);
-            var value = system.memory.Read(addr);
+            var value = bus.Read(addr);
             status.Carry = (value & 0x1) == 0x1;
             value = (byte)((value >> 1) + (prevCarry ? 0x80 : 0));
             SetNegativeAndZero(value);
 
-            system.memory.Write(addr, value);
+            bus.Write(addr, value);
         }
 
         private void NOP()
@@ -776,14 +775,14 @@ CPU:
             {
                 case Mode.ZP:
                     clock += 3;
-                    addr = system.memory.Read(argument);
-                    value = system.memory.Read(addr);
+                    addr = bus.Read(argument);
+                    value = bus.Read(addr);
                     pc += 2;
                     break;
                 case Mode.ABS:
                     clock += 4;
-                    addr = system.memory.ReadWord(argument);
-                    value = system.memory.Read(addr);
+                    addr = bus.ReadWord(argument);
+                    value = bus.Read(addr);
                     pc += 3;
                     break;
                 default:
@@ -804,15 +803,15 @@ CPU:
             {
                 case Mode.ABS:
                     clock += 3;
-                    addr = system.memory.ReadWord(argument);
+                    addr = bus.ReadWord(argument);
                     pc = addr;
                     break;
                 case Mode.IND:
                     clock += 5;
-                    addr = system.memory.ReadWord(argument);
+                    addr = bus.ReadWord(argument);
                    
                     var oldPC = pc;
-                    pc = system.memory.ReadWordWrapped(addr);
+                    pc = bus.ReadWordWrapped(addr);
 
                     if ((oldPC & 0xFF00) != (pc & 0xFF00)) 
                         clock += 2;
@@ -829,7 +828,7 @@ CPU:
 
             PushWord(pc);
             PushStatus();
-            pc = system.memory.ReadWord(0xFFFE);
+            pc = bus.ReadWord(0xFFFE);
             status.InterruptDisable = true;
         }
 
@@ -854,7 +853,7 @@ CPU:
             clock += 6;
 
             PushWord((ushort)(pc + 2));
-            pc = system.memory.ReadWord((ushort)(pc + 1));
+            pc = bus.ReadWord((ushort)(pc + 1));
         }
 
         private void Branch(bool cond)
@@ -866,7 +865,7 @@ CPU:
                 clock++;
 
                 var argument = (ushort)(pc + 1);
-                var address = (sbyte)(system.memory.Read(argument));
+                var address = (sbyte)(bus.Read(argument));
                 pc += 2;
                 var page = pc >> 8;
                 pc = (ushort)(pc + address);
@@ -941,7 +940,7 @@ CPU:
             clock += 4;
 
             sp++;
-            a = system.memory.Read((ushort)(sp + 0x100));
+            a = bus.Read((ushort)(sp + 0x100));
 
             SetNegativeAndZero(a);
         }
@@ -951,7 +950,7 @@ CPU:
             pc += 1;
             clock += 3;
 
-            system.memory.Write((ushort)(sp + 0x100), a);
+            bus.Write((ushort)(sp + 0x100), a);
             sp--;
         }
 
@@ -972,7 +971,7 @@ CPU:
         private byte Pull()
         {
             sp++;
-            var value = system.memory.Read((ushort)(sp + 0x100));
+            var value = bus.Read((ushort)(sp + 0x100));
 
             return value;
         }
@@ -1003,7 +1002,7 @@ CPU:
 
         private void Push(byte value)
         {
-            system.memory.Write((ushort)(sp + 0x100), value);
+            bus.Write((ushort)(sp + 0x100), value);
             sp--;
         }
 
@@ -1035,7 +1034,7 @@ CPU:
 
             if (mode == Mode.INDX) 
             {
-                Console.WriteLine("AYY");
+                System.Console.WriteLine("AYY");
             }
 
             var value = ReadNext(mode, true);

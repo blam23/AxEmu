@@ -1,21 +1,25 @@
 ﻿namespace AxEmu.NES
 {
-    internal class MemoryMapper : IMemory
+    internal class CPUMemoryBus : MemoryBus
     {
         // https://www.nesdev.org/wiki/CPU_memory_map
 
         private readonly byte[] internalRAM = new byte[0x800];
-        private readonly System system;
+        private readonly Emulator system;
+        private IMapper mapper;
 
-        public MemoryMapper(System system)
+        public CPUMemoryBus(Emulator system)
         {
             this.system = system;
         }
 
-        public byte Read(ushort address)
+        private byte ReadRAM(ushort address) => internalRAM[address & 0x7ff];
+        private void WriteRAM(ushort address, byte value) => internalRAM[address & 0x7ff] = value;
+
+        public override byte Read(ushort address)
         {
             if (address < 0x2000)
-                return internalRAM[address & 0x7ff];
+                return ReadRAM(address);
 
             if (address < 0x4000)
                 return system.ppu.Read(address);
@@ -27,7 +31,7 @@
                 return system.joyPad2.Read();
 
             if (address < 0x4020)
-                return system.apu.read(address);
+                return system.apu.Read(address);
 
             if (address >= 0x8000 && address <= 0xBFFF)
                 return system.cart.prgRomPages[0][address - 0x8000];
@@ -35,26 +39,14 @@
             if (address >= 0xc000)
                 return system.cart.prgRomPages[^1][address - 0xc000];
 
-            return 0;//throw new NotImplementedException("Need to map ROM n shit");
-        }
-        public ushort ReadWord(ushort address)
-        {
-            ushort r = Read((ushort)(address + 1));
-            r = (ushort)(r << 8);
-            r += Read(address);
-            return r;
+            //    return mapper.Read(address);
+            return 0;
         }
 
-        public ushort ReadWordWrapped(ushort address)
-        {
-            ushort high = (ushort)((address & 0xFF) == 0xFF ? address - 0xFF : address + 1);
-            return (ushort)(Read(address) | Read(high) << 8);
-        }
-
-        public void Write(ushort address, byte value)
+        public override void Write(ushort address, byte value)
         {
             if (address < 0x2000)
-                internalRAM[address & 0x7ff] = value;
+                WriteRAM(address, value);
             else if (address < 0x4000)
                 system.ppu.Write(address, value);
             else if (address == 0x4014)
@@ -64,12 +56,9 @@
             else if (address == 0x4017)
                 system.joyPad2.Poll(value);
             else if (address < 0x4020)
-                system.apu.write(address, value);
-
-
+                system.apu.Write(address, value);
             //else
-                //Console.WriteLine($"<!> Unknown write to: {address:X4} -> {value:X2}");
-                //throw new NotImplementedException("Need to map ROM n shit");
+            //    return mapper.Write(address, value);
         }
     }
 }

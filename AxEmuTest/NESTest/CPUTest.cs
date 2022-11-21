@@ -6,7 +6,7 @@ namespace AxEmuTest.NESTest
     public class CPUTest
     {
         MockMemory mem;
-        AxEmu.NES.System system;
+        AxEmu.NES.Emulator system;
 
         [TestInitialize]
         public void Init()
@@ -15,7 +15,7 @@ namespace AxEmuTest.NESTest
             mem.TestSetResponse(AxEmu.NES.CPU.RESET_VECTOR, 0x0);
             mem.TestSetResponse(AxEmu.NES.CPU.RESET_VECTOR+1, 0x0);
 
-            system = new AxEmu.NES.System(mem);
+            system = new AxEmu.NES.Emulator(mem);
             system.cpu.Init();
         }
 

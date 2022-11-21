@@ -4,14 +4,14 @@ namespace AxEmu.NES
 {
     internal class Debug
     {
-        private static byte NextByte(System system)
+        private static byte NextByte(Emulator system)
         {
-            return system.memory.Read((ushort)(system.cpu.pc + 1));
+            return system.cpuBus.Read((ushort)(system.cpu.pc + 1));
         }
 
-        private static ushort NextWord(System system)
+        private static ushort NextWord(Emulator system)
         {
-            return system.memory.ReadWord((ushort)(system.cpu.pc + 1));
+            return system.cpuBus.ReadWord((ushort)(system.cpu.pc + 1));
         }
 
         private static Dictionary<string, string> prettyAddrs = new()
@@ -43,7 +43,7 @@ namespace AxEmu.NES
             return $"{instr} {addr}";
         }
 
-        private static string CalcName(System system, string instr, Mode addrMode = Mode.None)
+        private static string CalcName(Emulator system, string instr, Mode addrMode = Mode.None)
         {
             var cpu = system.cpu;
             var addr = addrMode switch
@@ -64,15 +64,15 @@ namespace AxEmu.NES
             return Calc(instr, addr);
         }
 
-        private static string CalcName(System system, string instr, ushort addr)
+        private static string CalcName(Emulator system, string instr, ushort addr)
         {
             var cpu = system.cpu;
-            var addrStr = $"${system.memory.ReadWord(addr)}";
+            var addrStr = $"${system.cpuBus.ReadWord(addr)}";
 
             return Calc(instr, addrStr);
         }
 
-        public static string PPUState(System system)
+        public static string PPUState(Emulator system)
         {
             var ppu = system.ppu;
             return $@"PPU:
@@ -84,7 +84,7 @@ namespace AxEmu.NES
 ";
         }
 
-        internal static string GetOpcodeName(System system, byte nextInstr)
+        internal static string GetOpcodeName(Emulator system, byte nextInstr)
         {
             if (OpCodeNames.TryGetValue(nextInstr, out var nameAction))
                 return nameAction(system);
@@ -92,7 +92,7 @@ namespace AxEmu.NES
             return $"{nextInstr:X2}";
         }
 
-        public static readonly Dictionary<ushort, Func<System, string>> OpCodeNames = new()
+        public static readonly Dictionary<ushort, Func<Emulator, string>> OpCodeNames = new()
         {
             //
             // MOVE

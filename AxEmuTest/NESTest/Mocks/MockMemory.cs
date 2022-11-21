@@ -2,7 +2,7 @@
 
 namespace AxEmuTest.NESTest.Mocks
 {
-    internal class MockMemory : IMemory
+    internal class MockMemory : MemoryBus
     {
         private Dictionary<ushort, byte> data = new();
         public Dictionary<ushort, byte> Written = new();
@@ -12,24 +12,15 @@ namespace AxEmuTest.NESTest.Mocks
             data[address] = value;
         }
 
-        public byte Read(ushort address)
+        public override byte Read(ushort address)
         {
             return data[address];
         }
 
-        public ushort ReadWord(ushort address)
-        {
-            return (ushort)((data[address] << 8) + data[(ushort)(address+1)]);
-        }
-
-        public void Write(ushort address, byte value)
+        public override void Write(ushort address, byte value)
         {
             Written[address] = value;
         }
 
-        public ushort ReadWordWrapped(ushort address)
-        {
-            return ReadWord(address);
-        }
     }
 }

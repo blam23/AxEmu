@@ -7,9 +7,9 @@ namespace AxEmu.NES
     internal class Display
     {
         IWindow window;
-        System system;
+        Emulator system;
 
-        public Display(System system)
+        public Display(Emulator system)
         {
             this.system = system;
 
