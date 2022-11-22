@@ -115,7 +115,6 @@
         {
             SetInitialState();
             pc = bus.ReadWord(RESET_VECTOR);
-
         }
 
         public CPU(MemoryBus bus)

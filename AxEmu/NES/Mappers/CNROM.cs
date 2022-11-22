@@ -6,6 +6,7 @@
         private Emulator? system;
 
         private readonly byte[] ram = new byte[0x2000];
+        private ushort mask = 0x3FFF;
 
         // Current bank
         private int page = 0;
@@ -17,6 +18,7 @@
         public void Init(Emulator system)
         {
             this.system = system;
+            mask = (ushort)(system.cart.prgRomSize > 1 ? 0x7FFF : 0x3FFF);
         }
 
         public byte Read(ushort address)
@@ -27,11 +29,8 @@
             if (address >= 0x6000 && address < 0x8000)
                 return ram[address - 0x6000];
 
-            if (address >= 0x8000 && address <= 0xBFFF)
-                return system.cart.prgRomPages[0][address - 0x8000];
-
-            if (address >= 0xc000)
-                return system.cart.prgRomPages[^1][address - 0xc000];
+            if (address >= 0x8000 && address <= 0xFFFF)
+                return system.cart.prgRom[address & mask];
 
             return 0;
         }
@@ -41,11 +40,8 @@
             if (system == null)
                 throw new InvalidOperationException("Attempted to read from uninitialised mapper");
 
-            if (address < 0x1000)
-                return system.cart.chrRomPages[page][address];
-
             if (address < 0x2000)
-                return system.cart.chrRomPages[page+1][address - 0x1000];
+                return system.cart.chrRom[page * 0x2000 + address];
 
             return 0;
         }
@@ -62,6 +58,11 @@
             {
                 page = (value & 0x0F)*2;
             }
+        }
+
+        public void WriteChrRom(ushort address, byte value)
+        {
+            return;
         }
     }
 }

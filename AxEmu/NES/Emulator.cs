@@ -1,4 +1,5 @@
-﻿using System.Diagnostics;
+﻿using AxEmu.NES.Mappers;
+using System.Diagnostics;
 using System.Reflection;
 
 namespace AxEmu.NES
@@ -16,6 +17,14 @@ namespace AxEmu.NES
         // Inputs
         public JoyPad joyPad1;
         public JoyPad joyPad2;
+
+        // Data
+        private Mirroring mirroring = Mirroring.Horizontal;
+        public Mirroring Mirroring 
+        { 
+            get { return mirroring; } 
+            set { mirroring = value; ppu.UpdateMirroring(); } 
+        }
 
         // Helpers
         public Debugger debug;
@@ -44,9 +53,9 @@ namespace AxEmu.NES
             FrameCompleted?.Invoke(bitmap);
         }
 
-        public Emulator()
+        public Emulator(MemoryBus? memory = null)
         {
-            cpuBus = new CPUMemoryBus(this);
+            cpuBus = memory ?? new CPUMemoryBus(this);
             cpu = new CPU(cpuBus);
             ppu = new PPU(this);
             apu = new APU(this);
@@ -55,19 +64,7 @@ namespace AxEmu.NES
             debug = new Debugger(this);
 
             LoadMappers();
-        }
-
-        public Emulator(MemoryBus memory)
-        {
-            cpuBus = memory;
-            cpu = new CPU(memory);
-            ppu = new PPU(this);
-            apu = new APU(this);
-            joyPad1 = new JoyPad(this);
-            joyPad2 = new JoyPad(this);
-            debug = new Debugger(this);
-
-            LoadMappers();
+            ppu.FrameCompleted += OnFrameCompleted;
         }
 
         internal Dictionary<ushort, Type> mappers = new();
@@ -109,6 +106,7 @@ namespace AxEmu.NES
         {
             Reset();
             cart = new(ROMFileLocation);
+            Mirroring = cart.mirroring;
 
             if (cart.LoadState == Cart.State.FailedToOpen)
                 throw new FileLoadException("Unable to open ROM file");
@@ -123,8 +121,6 @@ namespace AxEmu.NES
             mapper.Init(this);
 
             cpu.Init();
-
-            ppu.FrameCompleted += OnFrameCompleted;
         }
 
 

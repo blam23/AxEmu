@@ -5,6 +5,7 @@
         byte Read(ushort address);
         void Write(ushort address, byte value);
         byte ReadChrRom(ushort address);
+        void WriteChrRom(ushort address, byte value);
         void Init(Emulator system);
     }
 

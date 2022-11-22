@@ -40,6 +40,12 @@ namespace AxWPF
 
             PTL.Source = bmpLeft;
             PTR.Source = bmpRight;
+
+            Closing += (e, o) =>
+            {
+                ClearNes();
+                patternTableUpdateTimer.Dispose();
+            };
         }
 
         public void SetNes(AxEmu.NES.Emulator system)
@@ -53,14 +59,15 @@ namespace AxWPF
             nes = null;
         }
 
+
         public void UpdatePatternTables()
         {
-            if (nes == null || nes.Unloaded())
-                return;
-
             Application.Current.Dispatcher.BeginInvoke(
                 () =>
                 {
+                    if (nes == null || nes.Unloaded())
+                        return;
+                    
                     var fullRect = new Int32Rect(0, 0, 128, 128);
                     byte[] ptl = nes.debug.GetPatternTableLeft();
                     byte[] ptr = nes.debug.GetPatternTableRight();

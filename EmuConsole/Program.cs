@@ -4,9 +4,9 @@ using System.Diagnostics;
 
 Emulator testNes = new();
 
-testNes.LoadROM("D:\\Test\\NES\\castlevania.nes");
+testNes.LoadROM("D:\\Test\\NES\\tetris.nes");
 
-bool readKey = false;
+bool readKey = true;
 bool printCpu = true;
 
 ulong i = 0;

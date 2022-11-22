@@ -637,5 +637,10 @@ namespace AxEmu.NES
                 from++;
             }
         }
+
+        internal void UpdateMirroring()
+        {
+            mem.UpdateMirroring();
+        }
     }
 }
