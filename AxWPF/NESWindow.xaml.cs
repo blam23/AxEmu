@@ -1,5 +1,6 @@
 ﻿using Microsoft.Win32;
 using System.IO;
+using System.Security.Cryptography;
 using System.Threading;
 using System.Windows;
 using System.Windows.Media;
@@ -31,9 +32,7 @@ namespace AxWPF
         {
             InitializeComponent();
 
-            nes = new("D:\\Test\\NES\\mario.nes");
-            //nes = new("D:\\Test\\NES\\tetris.nes");
-            //nes = new("D:\\Test\\NES\\nes-test-roms-master\\stress\\NEStress.NES");
+            nes = new();
 
             // Technically this can be a much lower bit image, but we might want ot apply some effects n stuff
             bitmap = new(
@@ -65,8 +64,6 @@ namespace AxWPF
             ppuDebugWindow = new Debug_PPU();
             ppuDebugWindow.SetNes(nes);
             ppuDebugWindow.Show();
-
-            Loaded += (_, _) => StartEmulator(true);
         }
 
         private void NESWindow_Closing(object? sender, System.ComponentModel.CancelEventArgs e)
@@ -78,7 +75,7 @@ namespace AxWPF
                 StopLog();
 
             nes.debug.UnsetLogger();
-            console.Close();
+            //console.Close();
         }
 
         public void DispatchFrame(byte[] frame)
@@ -248,7 +245,7 @@ namespace AxWPF
         private void StopEmulator()
         {
             nes.Stop();
-            frameWaitEvent.Set(); // make sure system isn't waiting for event
+            frameWaitEvent.Set();  // make sure system isn't waiting for event
             emuThread?.Join();     // block until system stops
         }
 
@@ -263,10 +260,24 @@ namespace AxWPF
             emuThread.Start();
         }
 
+        private bool LoadROM(string romFile)
+        {
+            try
+            {
+                nes.LoadROM(romFile);
+                return true;
+            }
+            catch(System.Exception e)
+            {
+                MessageBox.Show(e.Message);
+            }
+
+            return false;
+        }
+
         private void Open_Click(object sender, RoutedEventArgs e)
         {
             StopEmulator();
-            //nes = new AxEmu.NES.Emulator();
 
             var ofd = new OpenFileDialog
             {
@@ -274,10 +285,9 @@ namespace AxWPF
             };
             if (ofd.ShowDialog() == true)
             {
-                nes.LoadROM(ofd.FileName);
+                if(LoadROM(ofd.FileName))
+                    StartEmulator(false);
             }
-
-            StartEmulator(false);
         }
     }
 }

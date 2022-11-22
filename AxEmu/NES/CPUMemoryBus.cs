@@ -1,12 +1,13 @@
-﻿namespace AxEmu.NES
+﻿using AxEmu.NES.Mappers;
+
+namespace AxEmu.NES
 {
-    internal class CPUMemoryBus : MemoryBus
+    public class CPUMemoryBus : MemoryBus
     {
         // https://www.nesdev.org/wiki/CPU_memory_map
 
         private readonly byte[] internalRAM = new byte[0x800];
         private readonly Emulator system;
-        private IMapper mapper;
 
         public CPUMemoryBus(Emulator system)
         {
@@ -33,14 +34,7 @@
             if (address < 0x4020)
                 return system.apu.Read(address);
 
-            if (address >= 0x8000 && address <= 0xBFFF)
-                return system.cart.prgRomPages[0][address - 0x8000];
-
-            if (address >= 0xc000)
-                return system.cart.prgRomPages[^1][address - 0xc000];
-
-            //    return mapper.Read(address);
-            return 0;
+            return system.mapper.Read(address);
         }
 
         public override void Write(ushort address, byte value)
@@ -57,8 +51,8 @@
                 system.joyPad2.Poll(value);
             else if (address < 0x4020)
                 system.apu.Write(address, value);
-            //else
-            //    return mapper.Write(address, value);
+            else
+                system.mapper.Write(address, value);
         }
     }
 }

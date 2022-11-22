@@ -1,6 +1,7 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Runtime.InteropServices;
 using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
@@ -54,7 +55,7 @@ namespace AxWPF
 
         public void UpdatePatternTables()
         {
-            if (nes == null)
+            if (nes == null || nes.Unloaded())
                 return;
 
             Application.Current.Dispatcher.BeginInvoke(

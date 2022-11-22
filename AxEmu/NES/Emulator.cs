@@ -1,4 +1,5 @@
-﻿using System.Reflection;
+﻿using System.Diagnostics;
+using System.Reflection;
 
 namespace AxEmu.NES
 {
@@ -10,6 +11,7 @@ namespace AxEmu.NES
         internal PPU ppu;
         internal APU apu;
         internal MemoryBus cpuBus;
+        internal IMapper mapper;
 
         // Inputs
         public JoyPad joyPad1;
@@ -42,12 +44,6 @@ namespace AxEmu.NES
             FrameCompleted?.Invoke(bitmap);
         }
 
-        public Emulator(string ROMFileLocation)
-            : this()
-        {
-            LoadROM(ROMFileLocation);
-        }
-
         public Emulator()
         {
             cpuBus = new CPUMemoryBus(this);
@@ -57,6 +53,8 @@ namespace AxEmu.NES
             joyPad1 = new JoyPad(this);
             joyPad2 = new JoyPad(this);
             debug = new Debugger(this);
+
+            LoadMappers();
         }
 
         public Emulator(MemoryBus memory)
@@ -68,7 +66,39 @@ namespace AxEmu.NES
             joyPad1 = new JoyPad(this);
             joyPad2 = new JoyPad(this);
             debug = new Debugger(this);
+
+            LoadMappers();
         }
+
+        internal Dictionary<ushort, Type> mappers = new();
+        private void LoadMappers()
+        {
+            foreach (Type type in Assembly.GetExecutingAssembly().GetTypes())
+            {
+                var attrs = type.GetCustomAttributes(typeof(MapperAttribute), true);
+                foreach (var m in attrs)
+                {
+                    if (m is MapperAttribute mapper)
+                    {
+                        mappers[mapper.MapperNumber] = type;
+                    }
+                }
+            }
+        }
+
+        private IMapper CreateMapper(ushort mapperNumber)
+        {
+            if(mappers.TryGetValue(mapperNumber, out var mapperType))
+            {
+                if (Activator.CreateInstance(mapperType) is IMapper mapper)
+                    return mapper;
+
+                throw new Exception($"Mapper '{mapperNumber}' is invalid!");
+            }
+
+            throw new Exception($"Mapper '{mapperNumber}' not loaded (likely not supported).");
+        }
+
 
         private void Reset()
         {
@@ -89,51 +119,56 @@ namespace AxEmu.NES
             if (cart.LoadState != Cart.State.Loaded)
                 throw new Exception("Error loading ROM file");
 
+            mapper = CreateMapper(cart.Mapper);
+            mapper.Init(this);
+
             cpu.Init();
-            ppu.Init();
 
             ppu.FrameCompleted += OnFrameCompleted;
         }
 
-        public string GetInstr()
+
+
+        private ulong clock = 0;
+        public void Clock()
         {
-            var nextInstr = cpu.bus.Read(cpu.pc);
-            return Debug.GetOpcodeName(this, nextInstr);
+            // Always clock PPU
+            ppu.Clock();
+
+            // Always clock APU? (shouldn't this be every 6 ticks?)
+            apu.Clock();
+
+            // Clock CPU every 3 cycles
+            if (clock % 3 == 0)
+                cpu.Clock();
+
+            clock++;
         }
 
-        public void Run(bool consoleDebug = false, bool waitForKey = false)
+        public void Run()
         {
             running = true;
 
             while (running)
             {
-                // TODO: Move to debugger
-                if (consoleDebug)
-                {
-                    System.Console.WriteLine($"{cpu.ToSmallString()} | {GetInstr()}");
-                }
-
-                // TODO: Move to debugger
-                if (waitForKey)
-                {
-                    var key = System.Console.ReadKey(true);
-
-                    if (key.Key == ConsoleKey.P)
-                        System.Console.WriteLine(Debug.PPUState(this));
-
-                    if (key.Key == ConsoleKey.Escape)
-                        break;
-                }
-
                 // Wait for our cycle event if one is set (such as a debugger)
                 CycleWaitEvent?.WaitOne();
 
-                cpu.CheckInterrupts();
-                cpu.Iterate();
-                ppu.Tick(cpu.lastClock * 3);
-
-                //debug.OnInstruction();
+                Stopwatch sw = Stopwatch.StartNew();
+                for (int i = 0; i < 89342; i++)
+                {
+                    Clock();
+                }
+                sw.Stop();
+                var elapsed = sw.ElapsedMilliseconds;
+                if (elapsed < 16)
+                    Thread.Sleep((int)(16 - elapsed));
             }
+        }
+
+        public bool Unloaded()
+        {
+            return mapper == null;
         }
     }
 }

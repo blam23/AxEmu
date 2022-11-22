@@ -113,68 +113,60 @@ namespace AxEmu.NES
             mem = new PPUMemoryBus(system);
         }
 
-        public void Init()
+        public void Clock()
         {
-            mem.Init();
-        }
+            x        = clock % ClocksPerLine;
+            scanline = clock / ClocksPerLine;
 
-        public void Tick(ulong cycles)
-        {
-            for (ulong i = 0; i < cycles; i++)
+            // Start of new line - setup sprite data.
+            if (x == 320 && scanline >= 0 && scanline < RenderHeight)
             {
-                x        = clock % ClocksPerLine;
-                scanline = clock / ClocksPerLine;
-
-                // Start of new line - setup sprite data.
-                if (x == 320 && scanline >= 0 && scanline < RenderHeight)
-                {
-                    SetupSpritesOnNextLine();
-                }
-
-                scrollX = nextScrollX;
-                scrollY = nextScrollY;
-
-                bool solidBG = false;
-                if (ShowBackground)
-                    solidBG = renderPixelBackground();
-
-                if (ShowSprites)
-                    renderPixelSprite(solidBG);
-
-                clock++;
-
-                if (scanline == VBlankLine && x == 1)
-                {
-                    vblank = true;
-                    frame++;
-                    OnFrameCompleted();
-
-                    if (NMIOnVBlank)
-                    {
-                        system.cpu.SetNMI();
-                    }
-
-                    // TODO: REMOVE!!!
-                    //Thread.Sleep(7);
-                }
-
-                if (scanline == VBlankLine && x == 3)
-                    dontVBlank = false;
-
-                if (scanline == 261 && x == 1)
-                {
-                    vblank = false;
-                    spriteZeroHit = false;
-                }
-
-                if (x == 339 && scanline == 261 && renderingEnabled && !oddEvenFlag)
-                    clock = 0;
-
-                if (x == 340 && scanline == 261)
-                    clock = 0;
-
-                oddEvenFlag = !oddEvenFlag;
+                SetupSpritesOnNextLine();
             }
+
+            scrollX = nextScrollX;
+            scrollY = nextScrollY;
+
+            bool solidBG = false;
+            if (ShowBackground)
+                solidBG = renderPixelBackground();
+
+            if (ShowSprites)
+                renderPixelSprite(solidBG);
+
+            clock++;
+
+            if (scanline == VBlankLine && x == 1)
+            {
+                vblank = true;
+                frame++;
+                OnFrameCompleted();
+
+                if (NMIOnVBlank)
+                {
+                    system.cpu.SetNMI();
+                }
+
+                // TODO: REMOVE!!!
+                //Thread.Sleep(7);
+            }
+
+            if (scanline == VBlankLine && x == 3)
+                dontVBlank = false;
+
+            if (scanline == 261 && x == 1)
+            {
+                vblank = false;
+                spriteZeroHit = false;
+            }
+
+            if (x == 339 && scanline == 261 && renderingEnabled && !oddEvenFlag)
+                clock = 0;
+
+            if (x == 340 && scanline == 261)
+                clock = 0;
+
+            oddEvenFlag = !oddEvenFlag;
         }
 
         private byte StatusByte()

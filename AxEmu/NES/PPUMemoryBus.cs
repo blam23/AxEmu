@@ -5,18 +5,10 @@
         private readonly Emulator system;
 
         internal readonly byte[] VRAM = new byte[0x2000];
-        internal byte[] patternTable0 = new byte[0x1000];
-        internal byte[] patternTable1 = new byte[0x1000];
 
         public PPUMemoryBus(Emulator system)
         {
             this.system = system;
-        }
-
-        internal void Init()
-        {
-            patternTable0 = system.cart.chrRomPages[0];
-            patternTable1 = system.cart.chrRomPages[^1];
         }
 
         private static readonly Dictionary<ushort, ushort> addressMirrors = new()
@@ -42,17 +34,14 @@
             return address;
         }
 
+
         public override byte Read(ushort address)
         {
             address = MirrorAddress(address);
 
-            if (address < 0x1000)
+            if (address < 0x2000)
             {
-                return patternTable0[address];
-            }
-            else if (address < 0x2000)
-            {
-                return patternTable1[address - 0x1000];
+                return system.mapper.ReadChrRom(address);
             }
             else if (address < 0x4000)
             {
@@ -66,15 +55,15 @@
         {
             address = MirrorAddress(address);
 
-            if (address < 0x1000)
-            {
-                patternTable0[address] = value;
-            }
-            else if (address < 0x2000)
-            {
-                patternTable1[address - 0x1000] = value;
-            }
-            else if (address < 0x4000)
+            //if (address < 0x1000)
+            //{
+            //    patternTable0[address] = value;
+            //}
+            //else if (address < 0x2000)
+            //{
+            //    patternTable1[address - 0x1000] = value;
+            //}
+            if (address >= 0x2000 && address < 0x4000)
             {
                 VRAM[address - 0x2000] = value;
             }

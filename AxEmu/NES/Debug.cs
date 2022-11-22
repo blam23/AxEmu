@@ -2,7 +2,7 @@
 
 namespace AxEmu.NES
 {
-    internal class Debug
+    public class Debug
     {
         private static byte NextByte(Emulator system)
         {
@@ -82,6 +82,17 @@ namespace AxEmu.NES
   BackTableAddr   : {ppu.BackTableAddr:X4}
   NMIOnVBlank     : {(ppu.NMIOnVBlank ? 'Y' : 'N')}
 ";
+        }
+
+        public static string GetInstr(Emulator system)
+        {
+            var nextInstr = system.cpu.bus.Read(system.cpu.pc);
+            return Debug.GetOpcodeName(system, nextInstr);
+        }
+
+        public static string CPUState(Emulator system)
+        {
+            return $"{system.cpu.ToSmallString()} | {GetInstr(system)}";
         }
 
         internal static string GetOpcodeName(Emulator system, byte nextInstr)

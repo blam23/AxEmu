@@ -36,7 +36,7 @@ namespace AxEmu.NES
         private const int CHR_PAGE_SIZE =  8 * 1024;
 
         // Cart data
-        private ushort mapper;
+        public ushort Mapper;
         private int prgRomSize;
         private int chrRomSize;
         internal readonly List<byte[]> prgRomPages = new();
@@ -63,11 +63,11 @@ namespace AxEmu.NES
             var flags6     = rom[6];
             mirroring      = (flags6 & 0x1) == 0x1 ? Mirroring.Vertical : Mirroring.Horizontal;
             batteryPresent = (flags6 & 0x2) == 0x2;
-            mapper         = (ushort)(flags6 >> 4);
+            Mapper         = (ushort)(flags6 >> 4);
 
             // Flags 7
             var flags7 = rom[7];
-            mapper    |= (ushort)(flags7 & 0xF0);
+            Mapper    |= (ushort)(flags7 & 0xF0);
 
             // Region
             region = (rom[12] & 0x3) switch

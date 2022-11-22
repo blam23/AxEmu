@@ -1,9 +1,35 @@
 ﻿
 using AxEmu.NES;
+using System.Diagnostics;
 
-//AxEmu.NES.System testNes = new("D:\\Test\\NES\\zelda.nes");
-AxEmu.NES.Emulator testNes = new("D:\\Test\\NES\\nestest.nes");
-//AxEmu.NES.System testNes = new("D:\\Test\\NES\\nes-test-roms-master\\instr_misc\\rom_singles\\03-dummy_reads.nes");
-//AxEmu.NES.System testNes = new("D:\\Test\\NES\\nes-test-roms-master\\other\\GENIE.nes");
-testNes.Run(true, true);
-//testNes.Run();
+Emulator testNes = new();
+
+testNes.LoadROM("D:\\Test\\NES\\castlevania.nes");
+
+bool readKey = false;
+bool printCpu = true;
+
+ulong i = 0;
+while (true)
+{
+    if (i % 3 == 0)
+    {
+        if (printCpu)
+            Console.WriteLine(AxEmu.NES.Debug.CPUState(testNes));
+
+        if (readKey)
+        {
+            var key = Console.ReadKey(true);
+
+            if (key.Key == ConsoleKey.P)
+                Console.WriteLine(AxEmu.NES.Debug.PPUState(testNes));
+
+            if (key.Key == ConsoleKey.Escape)
+                break;
+        }
+    }
+
+    testNes.Clock();
+
+    i++;
+}

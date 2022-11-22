@@ -27,7 +27,7 @@ namespace AxEmuTest.NESTest
             mem.TestSetResponse(0x2, 0x85); // STA ZP  - F0
             mem.TestSetResponse(0x3, 0xF0);
 
-            system.cpu.Iterate(); // LDA
+            system.cpu.Clock(); // LDA
 
             Assert.AreEqual(0xBA, system.cpu.a);
             Assert.AreEqual(0x2, system.cpu.pc);
@@ -35,7 +35,7 @@ namespace AxEmuTest.NESTest
             Assert.IsTrue(system.cpu.status.Negative);
             Assert.IsFalse(system.cpu.status.Zero);
 
-            system.cpu.Iterate(); // STA
+            system.cpu.Clock(); // STA
 
             Assert.AreEqual(0xBA, mem.Written[0xF0]);
             Assert.AreEqual(0x4, system.cpu.pc);

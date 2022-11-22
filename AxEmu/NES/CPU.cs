@@ -93,7 +93,7 @@
 
         // Clock
         internal ulong totalClock = 0;
-        internal ulong lastClock = 0;
+        internal ulong cycles = 0;
         internal ulong clock = 0;
         internal ulong instrs = 0;
 
@@ -115,6 +115,7 @@
         {
             SetInitialState();
             pc = bus.ReadWord(RESET_VECTOR);
+
         }
 
         public CPU(MemoryBus bus)
@@ -141,20 +142,21 @@ CPU:
             return $"{pc:X4} | a: {a:X2} | x: {x:X2} | y: {y:X2} | s: {sp:X2} | {status.ToSmallString()}";
         }
 
-        public void Iterate()
+        public void Clock()
         {
+            CheckInterrupts();
+
             byte op = bus.Read(pc);
 
             if (opCodeActions.TryGetValue(op, out var opAction))
             {
                 opAction(this);
                 totalClock += clock;
-                lastClock = clock;
+                cycles = clock;
                 clock = 0;
             }
             else
             {
-                //pc++;
                 throw new NotImplementedException($"Opcode not supported: {op:X2}");
             }
 
