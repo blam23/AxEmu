@@ -1,14 +1,19 @@
 ﻿using AxEmu.NES;
 
-// Load ROM
-var testNes = new Emulator();
-testNes.LoadROM("D:\\Test\\NES\\nestest.nes");
+bool running = true;
 
 // Initialise Display
-var display = new Display(testNes);
+var display = new PixelDisplay("AxNES", 256, 240, 256 * 2, 240 * 2, Silk.NET.SDL.PixelFormatEnum.Bgr24);
+var dispThread = new Thread(display.Run);
+dispThread.Start();
 
-// Run Emulator
-testNes.Run();
+// Load NES
+var nes = new Emulator();
+nes.LoadROM("D:\\Test\\NES\\mario.nes");
 
-// After Emulator stops - close window.
-display.Close();
+nes.FrameCompleted += display.SetPixels;
+
+while(running)
+{
+    nes.Clock();
+}
