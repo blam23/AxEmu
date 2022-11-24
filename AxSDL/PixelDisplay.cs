@@ -26,7 +26,7 @@ namespace AxEmu.NES
         private Rectangle<int> pixelRect;
         public PixelDisplay(string title, int pixelWidth, int pixelHeight, int windowWidth, int windowHeight, PixelFormatEnum pixelFormat)
         {
-            window        = SDL.CreateWindow(title, 300, 300, windowWidth, windowHeight, (uint)(WindowFlags.Shown));
+            window        = SDL.CreateWindow(title, Sdl.WindowposUndefined, Sdl.WindowposUndefined, windowWidth, windowHeight, (uint)(WindowFlags.Shown | WindowFlags.Vulkan));
             renderer      = SDL.CreateRenderer(window, -1, (uint)(RendererFlags.Accelerated));
             pixelSurface  = SDL.CreateRGBSurfaceWithFormat(0, pixelWidth, pixelHeight, 0, (uint)pixelFormat);
             windowRect    = new Rectangle<int>(0, 0, windowWidth, windowHeight);
@@ -48,13 +48,10 @@ namespace AxEmu.NES
         public void SetPixels(byte[] data)
         {
             SDL.Memcpy(pixelSurface->Pixels, ref data[0], (nuint)data.Length);
-            @throw(() => SDL.LowerBlitScaled(pixelSurface, ref pixelRect, windowSurface, ref windowRect));
-            SDL.UpdateWindowSurface(window);
         }
 
         public void Run()
         {
-            int x = 0;
             while(true)
             {
                 // Check event queue
@@ -62,11 +59,17 @@ namespace AxEmu.NES
                 while(SDL.PollEvent(&evt) == 1)
                 {
                     var type = (EventType)evt.Type;
-                    Console.WriteLine($"{type}");
+                    Console.WriteLine($"Event: {type}");
                     switch (type)
                     {
                         case EventType.Quit:
+                            Console.WriteLine($"Quitting.");
                             return;
+
+                        case EventType.Windowevent:
+                            Console.WriteLine($"{(WindowEventID)evt.Window.Event}");
+                            break;
+
 
                         case EventType.Mousemotion:
                             Console.WriteLine($"{evt.Motion.X}, {evt.Motion.Y}");
@@ -76,6 +79,9 @@ namespace AxEmu.NES
                             break;
                     }
                 }
+
+                @throw(() => SDL.LowerBlitScaled(pixelSurface, ref pixelRect, windowSurface, ref windowRect));
+                SDL.UpdateWindowSurface(window);
             }
         }
 
