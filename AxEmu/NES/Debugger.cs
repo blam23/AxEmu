@@ -1,9 +1,5 @@
-﻿using System;
-using System.Collections.Generic;
+﻿using AxEmu.NES.Mappers;
 using System.Drawing;
-using System.Linq;
-using System.Text;
-using System.Threading.Tasks;
 
 namespace AxEmu.NES
 {
@@ -105,6 +101,50 @@ namespace AxEmu.NES
         public byte[] GetPatternTableRight()
         {
             return GetPatternTable(0x1000);
+        }
+
+        public byte ReadPRGRom(ushort addr)
+        { 
+            return system.cart.prgRom[addr];
+        }
+
+        public void DumpMMC3Lookups()
+        {
+            if (system.mapper is MMC3 mmc)
+            {
+                Console.WriteLine("MMC:");
+                for (var i = 0; i < mmc.prgPageLookup.Length; i++)
+                {
+                    Console.WriteLine($"\tPRG[{i:X2}] = {mmc.prgPageLookup[i] / 0x2000:X2} | {mmc.prgPageLookup[i]:X6}");
+                }
+                Console.WriteLine($"");
+                for (var i = 0; i < mmc.chrPageLookup.Length; i++)
+                {
+                    Console.WriteLine($"\tCHR[{i:X2}] = {mmc.chrPageLookup[i] / 0x0400:X2} | {mmc.chrPageLookup[i]:X6}");
+                }
+            }
+        }
+
+        public string CPUStatus()
+        {
+            var status = "";
+            var cpu = system.cpu;
+
+
+            if (system.mapper is MMC3 mmc)
+            {
+                var p = mmc.GetPgrPage(cpu.pc);
+                var page = p / 0x2000;
+                var romAddr = p + (cpu.pc & 0x1FFF);
+                status += $"{page:X2}:{cpu.pc:X4} | {romAddr:X6} |";
+            }
+            else
+            {
+                status += $"{cpu.pc:X4} |";
+            }
+
+            status += $" a: {cpu.a:X2} | x: {cpu.x:X2} | y: {cpu.y:X2} | s: {cpu.sp:X2} | {cpu.status.ToSmallString()}";
+            return status;
         }
     }
 }

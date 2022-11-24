@@ -124,6 +124,9 @@ namespace AxEmu.NES
                 SetupSpritesOnNextLine();
             }
 
+            if (x == 260 && scanline < 240)
+                system.mapper.Scanline();
+
             scrollX = nextScrollX;
             scrollY = nextScrollY;
 

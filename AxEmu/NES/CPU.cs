@@ -99,6 +99,7 @@
 
         // Interrupts
         private bool NMISet = false;
+        private bool IRQSet = false;
 
         private void SetInitialState()
         {
@@ -136,11 +137,6 @@ CPU:
 ";
         }
 
-        public string ToSmallString()
-        {
-            return $"{pc:X4} | a: {a:X2} | x: {x:X2} | y: {y:X2} | s: {sp:X2} | {status.ToSmallString()}";
-        }
-
         public void Clock()
         {
             CheckInterrupts();
@@ -156,7 +152,7 @@ CPU:
             }
             else
             {
-                throw new NotImplementedException($"Opcode not supported: {op:X2}");
+                throw new NotImplementedException($"Opcode not supported: {op:X2} (pc: {pc:X4})");
             }
 
             instrs++;
@@ -166,6 +162,9 @@ CPU:
         {
             if (NMISet)
                 NMI();
+
+            if (IRQSet)
+                IRQ();
         }
 
         internal void SetNMI()
@@ -173,15 +172,40 @@ CPU:
             NMISet = true;
         }
 
+        internal void SetIRQ()
+        {
+            IRQSet = true;
+        }
+
         private void NMI()
         {
             NMISet = false;
+            cycles += 8;
 
             PushWord(pc);
+            status.Break = true;
+            status.InterruptDisable = true;
             PushStatus();
 
             pc = bus.ReadWord(NMI_VECTOR);
         }
+
+        private void IRQ()
+        {
+            if (!status.InterruptDisable)
+            {
+                IRQSet = false;
+                cycles += 7;
+
+                PushWord(pc);
+                status.Break = true;
+                status.InterruptDisable = true;
+                PushStatus();
+
+                pc = bus.ReadWord(IRQ_VECTOR);
+            }
+        }
+
 
         #region Op Codes
 

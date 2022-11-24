@@ -136,7 +136,12 @@ namespace AxEmu.NES
 
             // Clock CPU every 3 cycles
             if (clock % 3 == 0)
+            {
+                if (mapper.IsIRQSet())
+                    cpu.SetIRQ();
+
                 cpu.Clock();
+            }
 
             clock++;
         }

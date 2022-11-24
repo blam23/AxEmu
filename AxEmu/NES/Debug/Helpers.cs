@@ -1,9 +1,22 @@
 ﻿using static AxEmu.NES.CPU;
 
-namespace AxEmu.NES
+namespace AxEmu.NES.Debug
 {
-    public class Debug
+    public static class Helpers
     {
+        public static void PrintImportant(object o)
+        {
+            var obc = Console.BackgroundColor;
+            var ofc = Console.ForegroundColor;
+
+            Console.BackgroundColor = ConsoleColor.Red;
+            Console.ForegroundColor = ConsoleColor.White;
+
+            Console.WriteLine(o);
+
+            
+        }
+
         private static byte NextByte(Emulator system)
         {
             return system.cpuBus.Read((ushort)(system.cpu.pc + 1));
@@ -14,7 +27,7 @@ namespace AxEmu.NES
             return system.cpuBus.ReadWord((ushort)(system.cpu.pc + 1));
         }
 
-        private static Dictionary<string, string> prettyAddrs = new()
+        private static readonly Dictionary<string, string> prettyAddrs = new()
         {
             { "$2000", "PPU_CTRL" },
             { "$2001", "PPU_MASK" },
@@ -87,12 +100,12 @@ namespace AxEmu.NES
         public static string GetInstr(Emulator system)
         {
             var nextInstr = system.cpu.bus.Read(system.cpu.pc);
-            return Debug.GetOpcodeName(system, nextInstr);
+            return GetOpcodeName(system, nextInstr);
         }
 
         public static string CPUState(Emulator system)
         {
-            return $"{system.cpu.ToSmallString()} | {GetInstr(system)}";
+            return $"{system.debug.CPUStatus()} | {GetInstr(system)}";
         }
 
         internal static string GetOpcodeName(Emulator system, byte nextInstr)
@@ -102,6 +115,7 @@ namespace AxEmu.NES
 
             return $"{nextInstr:X2}";
         }
+
 
         public static readonly Dictionary<ushort, Func<Emulator, string>> OpCodeNames = new()
         {

@@ -189,5 +189,9 @@ namespace AxEmu.NES.Mappers
         {
             return;
         }
+
+        public bool IsIRQSet() { return false; }
+
+        public void Scanline() { }
     }
 }

@@ -67,5 +67,9 @@
         {
             return;
         }
+
+        public bool IsIRQSet() { return false; }
+
+        public void Scanline() { }
     }
 }
