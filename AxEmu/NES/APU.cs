@@ -12,7 +12,7 @@ namespace AxEmu.NES
         // Frame data
         uint frameClockCounter;
 
-        public ulong AudioData
+        public ushort AudioData
         {
             get
             {
@@ -23,7 +23,7 @@ namespace AxEmu.NES
                 }
                 data /= (ulong)channels.Length;
 
-                return data;
+                return (ushort)data;
             }
         }
 

@@ -69,8 +69,8 @@ namespace AxWPF
                         return;
                     
                     var fullRect = new Int32Rect(0, 0, 128, 128);
-                    byte[] ptl = nes.debug.GetPatternTableLeft();
-                    byte[] ptr = nes.debug.GetPatternTableRight();
+                    var ptl = nes.debug.GetPatternTableLeft();
+                    var ptr = nes.debug.GetPatternTableRight();
 
                     bmpLeft.WritePixels
                     (

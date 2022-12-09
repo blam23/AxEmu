@@ -70,16 +70,8 @@
 
             internal string ToSmallString()
             {
-                return string.Format
-                (
-                    "{0}{1}-- {2}{3}{4}{5}",
-                    Negative ? 'N' : '-',
-                    Overflow ? 'V' : '-',
-                    Decimal ? 'D' : '-',
-                    InterruptDisable ? 'I' : '-',
-                    Zero ? 'Z' : '-',
-                    Carry ? 'C' : '-'
-                );
+                return
+                    $"{(Negative ? 'N' : '-')}{(Overflow ? 'V' : '-')}-- {(Decimal ? 'D' : '-')}{(InterruptDisable ? 'I' : '-')}{(Zero ? 'Z' : '-')}{(Carry ? 'C' : '-')}";
             }
         }
 
@@ -141,7 +133,7 @@ CPU:
         {
             CheckInterrupts();
 
-            byte op = bus.Read(pc);
+            var op = bus.Read(pc);
 
             if (opCodeActions.TryGetValue(op, out var opAction))
             {
@@ -452,10 +444,10 @@ CPU:
         internal ushort GetAddress(Mode mode, bool watchPageBoundary)
         {
             ushort addr = 0;
-            int page = 0;
-            int newpage = 0;
+            var page = 0;
+            var newpage = 0;
 
-            ushort argument = (ushort)(pc + 1);
+            var argument = (ushort)(pc + 1);
 
             switch (mode)
             {
@@ -522,17 +514,18 @@ CPU:
                 case Mode.IND:
                 case Mode.REL:
                     throw new NotImplementedException("TODO!");
+                case Mode.None:
                 default:
                     throw new Exception("Unknown Address Mode");
             }
         }
 
-        internal byte ReadNext(Mode mode, bool watchPageBoundary = false)
+        private byte ReadNext(Mode mode, bool watchPageBoundary = false)
         {
             return bus.Read(GetAddress(mode, watchPageBoundary));
         }
 
-        internal void WriteNext(Mode mode, byte value, bool watchPageBoundary = false)
+        private void WriteNext(Mode mode, byte value, bool watchPageBoundary = false)
         {
             bus.Write(GetAddress(mode, watchPageBoundary), value);
         }
@@ -574,7 +567,7 @@ CPU:
         {
             AddArthClockTime(mode);
 
-            byte ret = (byte)(value | ReadNext(mode, true));
+            var ret = (byte)(value | ReadNext(mode, true));
             SetNegativeAndZero(ret);
             return ret;
         }
@@ -583,7 +576,7 @@ CPU:
         {
             AddArthClockTime(mode);
 
-            byte ret = (byte)(value ^ ReadNext(mode));
+            var ret = (byte)(value ^ ReadNext(mode));
             SetNegativeAndZero(ret);
             return ret;
         }
@@ -592,19 +585,19 @@ CPU:
         {
             AddArthClockTime(mode);
 
-            byte ret = (byte)(value & ReadNext(mode));
+            var ret = (byte)(value & ReadNext(mode));
             SetNegativeAndZero(ret);
             return ret;
         }
 
         private byte AddCarry(byte input, byte operand)
         {
-            int result = (sbyte)input + (sbyte)operand + (sbyte)(status.Carry ? 1 : 0);
+            var result = (sbyte)input + (sbyte)operand + (sbyte)(status.Carry ? 1 : 0);
 
             status.Overflow = result < -128 || result > 127;
             status.Carry = (input + operand + (status.Carry ? 1 : 0)) > 0xFF;
 
-            byte ret = (byte)(result);
+            var ret = (byte)(result);
             SetNegativeAndZero(ret);
 
             return ret;
@@ -642,7 +635,7 @@ CPU:
             AddShiftClockTime(Mode.IMM);
 
             pc++;
-            byte ret = (byte)(value - 1);
+            var ret = (byte)(value - 1);
             SetNegativeAndZero(ret);
             return ret;
         }
@@ -664,7 +657,7 @@ CPU:
             AddShiftClockTime(Mode.IMM);
 
             pc++;
-            byte ret = (byte)(value + 1);
+            var ret = (byte)(value + 1);
             SetNegativeAndZero(ret);
             return ret;
         }
@@ -688,7 +681,7 @@ CPU:
 
             pc++;
             status.Carry = (value & 0x80) == 0x80;
-            byte ret = (byte)(value << 1);
+            var ret = (byte)(value << 1);
             SetNegativeAndZero(ret);
             return ret;
         }
@@ -713,7 +706,7 @@ CPU:
 
             pc++;
             status.Carry = (value & 0x1) == 0x1;
-            byte ret = (byte)(value >> 1);
+            var ret = (byte)(value >> 1);
             SetNegativeAndZero(ret);
             return ret;
         }
@@ -733,19 +726,19 @@ CPU:
 
         private byte Rol(byte value)
         {
-            bool prevCarry = status.Carry;
+            var prevCarry = status.Carry;
             AddShiftClockTime(Mode.IMM);
 
             pc++;
             status.Carry = (value & 0x80) == 0x80;
-            byte ret = (byte)((value << 1) + (prevCarry ? 1 : 0));
+            var ret = (byte)((value << 1) + (prevCarry ? 1 : 0));
             SetNegativeAndZero(ret);
             return ret;
         }
 
         private void RolAddr(Mode mode)
         {
-            bool prevCarry = status.Carry;
+            var prevCarry = status.Carry;
             AddShiftClockTime(mode);
 
             var addr = GetAddress(mode, false);
@@ -760,19 +753,19 @@ CPU:
 
         private byte Ror(byte value)
         {
-            bool prevCarry = status.Carry;
+            var prevCarry = status.Carry;
             AddShiftClockTime(Mode.IMM);
 
             pc++;
             status.Carry = (value & 0x1) == 0x1;
-            byte ret = (byte)((value >> 1) + (prevCarry ? 0x80 : 0));
+            var ret = (byte)((value >> 1) + (prevCarry ? 0x80 : 0));
             SetNegativeAndZero(ret);
             return ret;
         }
 
         private void RorAddr(Mode mode)
         {
-            bool prevCarry = status.Carry;
+            var prevCarry = status.Carry;
             AddShiftClockTime(mode);
 
             var addr = GetAddress(mode, false);
@@ -793,7 +786,7 @@ CPU:
         private void TestBit(Mode mode)
         {
             ushort addr = 0;
-            ushort argument = (ushort)(pc + 1);
+            var argument = (ushort)(pc + 1);
             byte value;
 
             switch (mode)
@@ -822,7 +815,7 @@ CPU:
         private void Jump(Mode mode)
         {
             ushort addr = 0;
-            ushort argument = (ushort)(pc + 1);
+            var argument = (ushort)(pc + 1);
 
             switch(mode)
             {
@@ -905,7 +898,7 @@ CPU:
             }
         }
 
-        internal void TAX()
+        private void TAX()
         {
             pc += 1; 
             clock += 2;
@@ -914,7 +907,7 @@ CPU:
             SetNegativeAndZero(a);
         }
 
-        internal void TXA()
+        private void TXA()
         {
             pc += 1;
             clock += 2;
@@ -923,7 +916,7 @@ CPU:
             SetNegativeAndZero(a);
         }
 
-        internal void TAY()
+        private void TAY()
         {
             pc += 1;
             clock += 2;
@@ -932,7 +925,7 @@ CPU:
             SetNegativeAndZero(a);
         }
 
-        internal void TYA()
+        private void TYA()
         {
             pc += 1;
             clock += 2;
@@ -942,7 +935,7 @@ CPU:
             SetNegativeAndZero(a);
         }
 
-        internal void TSX()
+        private void TSX()
         {
             pc += 1;
             clock += 2;
@@ -951,7 +944,7 @@ CPU:
             SetNegativeAndZero(x);
         }
 
-        internal void TXS()
+        private void TXS()
         {
             pc += 1;
             clock += 2;
@@ -959,7 +952,7 @@ CPU:
             sp = x;
         }
 
-        internal void PLA()
+        private void PLA()
         {
             pc += 1;
             clock += 4;
@@ -970,7 +963,7 @@ CPU:
             SetNegativeAndZero(a);
         }
 
-        internal void PHA()
+        private void PHA()
         {
             pc += 1;
             clock += 3;
@@ -979,7 +972,7 @@ CPU:
             sp--;
         }
 
-        internal void PLP()
+        private void PLP()
         {
             pc += 1;
             clock += 4;
@@ -1031,7 +1024,7 @@ CPU:
             sp--;
         }
 
-        internal void Store(byte value, Mode mode)
+        private void Store(byte value, Mode mode)
         {
             clock += mode switch
             {

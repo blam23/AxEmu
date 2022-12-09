@@ -2,7 +2,7 @@
 {
     internal class PWM : IChannel
     {
-        public bool enable = false;
+        public bool enable = true;
         //private byte duty = 0;
         //private bool loop = false;
         //private byte constantVolume = 0;
@@ -29,11 +29,9 @@
             sequencer.Clock(enable);
         }
 
-        private ushort[] buffer = new ushort[44100 / 60];
-
         public ulong GetSample()
         {
-            return sequencer.output;
+            return (ulong)(sequencer.output * 10);
         }
     }
 }

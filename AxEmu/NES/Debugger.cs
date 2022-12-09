@@ -50,7 +50,7 @@ namespace AxEmu.NES
         private byte[] GetPatternTable(ushort offset)
         {
             var mem = system.ppu.mem;
-            byte[] bitmap = new byte[128 * 128 * 3];
+            var bitmap = new byte[128 * 128 * 3];
 
             for (byte tileY = 0; tileY < 16; tileY++)
             {
@@ -58,9 +58,9 @@ namespace AxEmu.NES
                 {
                     for (byte y = 0; y < 8; y++)
                     {
-                        ushort location = (ushort)(offset + (tileX * 16) + (tileY * 256) + y);
-                        byte firstPlaneByte = mem.Read(location);
-                        byte secondPlaneByte = mem.Read((ushort)(location + 8));
+                        var location = (ushort)(offset + (tileX * 16) + (tileY * 256) + y);
+                        var firstPlaneByte = mem.Read(location);
+                        var secondPlaneByte = mem.Read((ushort)(location + 8));
 
                         for (byte x = 0; x < 8; x++)
                         {
@@ -101,6 +101,62 @@ namespace AxEmu.NES
         public byte[] GetPatternTableRight()
         {
             return GetPatternTable(0x1000);
+        }
+
+        public byte[] GetNameTable(int offset)
+        {
+            var mem = system.ppu.mem;
+            var bitmap = new byte[256 * 240 * 3];
+
+            for (byte tileY = 0; tileY < 30; tileY++)
+            {
+                for (byte tileX = 0; tileX < 32; tileX++)
+                {
+                    ushort nametableEntry = mem.Read((ushort)(offset + tileX + (tileY * 32)));
+
+                    var attrX   = tileX / 4;
+                    var attrY   = tileY / 4;
+                    var quadX   = (tileX % 4) / 2;
+                    var quadY   = (tileY % 4) / 2;
+
+                    var attr    = mem.Read((ushort)(offset + PPU.AttrTableAddr + attrY * 8 + attrX));
+                    var palette = (attr >> (byte)((quadX * 2) + (quadY * 4))) & 0x3;
+
+                    for (byte y = 0; y < 8; y++)
+                    {
+                        var entry = (ushort)(system.ppu.BackTableAddr + nametableEntry * 0x10 + y);
+                        var firstPlaneByte = mem.Read(entry);
+                        var secondPlaneByte = mem.Read((ushort)(entry + 8));
+
+                        for (byte x = 0; x < 8; x++)
+                        {
+                            var firstPlaneBit = (byte)((firstPlaneByte >> (byte)(7 - x)) & 1);
+                            var secondPlaneBit = (byte)((secondPlaneByte >> (byte)(7 - x)) & 1);
+
+                            Color pixelColour;
+                            if (firstPlaneBit == 0 && secondPlaneBit == 0)
+                            {
+                                pixelColour = system.ppu.lookupBGPalette(0);
+                            }
+                            else
+                            {
+                                var paletteIndex = firstPlaneBit + (secondPlaneBit * 2) + (palette * 4);
+                                pixelColour = system.ppu.lookupBGPalette((byte)paletteIndex);
+                            }
+
+                            var px = tileX * 8 + x;
+                            var py = tileY * 8 + y;
+
+                            // Store in our BGR buffer
+                            bitmap[(px + (py * 256)) * 3 + 0] = pixelColour.B;
+                            bitmap[(px + (py * 256)) * 3 + 1] = pixelColour.G;
+                            bitmap[(px + (py * 256)) * 3 + 2] = pixelColour.R;
+                        }
+                    }
+                }
+            }
+
+            return bitmap;
         }
 
         public byte ReadPRGRom(ushort addr)
@@ -146,5 +202,7 @@ namespace AxEmu.NES
             status += $" a: {cpu.a:X2} | x: {cpu.x:X2} | y: {cpu.y:X2} | s: {cpu.sp:X2} | {cpu.status.ToSmallString()}";
             return status;
         }
+
+ 
     }
 }

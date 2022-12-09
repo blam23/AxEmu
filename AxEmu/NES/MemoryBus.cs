@@ -21,7 +21,7 @@ namespace AxEmu.NES
 
         public ushort ReadWordWrapped(ushort address)
         {
-            ushort high = (ushort)((address & 0xFF) == 0xFF ? address - 0xFF : address + 1);
+            var high = (ushort)((address & 0xFF) == 0xFF ? address - 0xFF : address + 1);
             return (ushort)(Read(address) | Read(high) << 8);
         }
     }

@@ -5,12 +5,12 @@ Emulator nes = new();
 
 nes.LoadROM("D:\\Test\\NES\\mario-3.nes");
 
-bool readKey = false;
-bool printCpu = true;
+var readKey = false;
+var printCpu = true;
 
 ushort ReadHexValue()
 {
-    string num = "";
+    var num = "";
 
     while (true)
     {
@@ -53,10 +53,7 @@ ushort ReadHexValue()
             break;
     }
 
-    if (num.Length == 0)
-        return 0;
-
-    return ushort.Parse(num, System.Globalization.NumberStyles.HexNumber);
+    return num.Length == 0 ? (ushort)0 : ushort.Parse(num, System.Globalization.NumberStyles.HexNumber);
 }
 
 void DumpMemory(ulong stride = 16)

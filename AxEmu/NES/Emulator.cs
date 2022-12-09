@@ -38,6 +38,8 @@ namespace AxEmu.NES
         private bool running;
         public bool Running => running;
 
+        public ushort GetSample() => apu.AudioData;
+
         public void Stop()
         {
             running = false;
@@ -70,7 +72,7 @@ namespace AxEmu.NES
         internal Dictionary<ushort, Type> mappers = new();
         private void LoadMappers()
         {
-            foreach (Type type in Assembly.GetExecutingAssembly().GetTypes())
+            foreach (var type in Assembly.GetExecutingAssembly().GetTypes())
             {
                 var attrs = type.GetCustomAttributes(typeof(MapperAttribute), true);
                 foreach (var m in attrs)
@@ -131,8 +133,11 @@ namespace AxEmu.NES
             // Always clock PPU
             ppu.Clock();
 
-            // Always clock APU? (shouldn't this be every 6 ticks?)
-            apu.Clock();
+            // Clock APU every 6 cycles
+            if (clock % 6 == 0)
+            {
+                apu.Clock();
+            }
 
             // Clock CPU every 3 cycles
             if (clock % 3 == 0)
@@ -155,8 +160,8 @@ namespace AxEmu.NES
                 // Wait for our cycle event if one is set (such as a debugger)
                 CycleWaitEvent?.WaitOne();
 
-                Stopwatch sw = Stopwatch.StartNew();
-                for (int i = 0; i < 89342; i++)
+                var sw = Stopwatch.StartNew();
+                for (var i = 0; i < 89342; i++)
                 {
                     Clock();
                 }

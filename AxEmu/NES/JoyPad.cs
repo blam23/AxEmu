@@ -25,7 +25,7 @@ namespace AxEmu.NES
             this.system = system;
         }
 
-        internal byte StateByte
+        private byte StateByte
         {
             get {
                 byte status = 0;
@@ -64,7 +64,7 @@ namespace AxEmu.NES
 
         internal byte Read()
         {
-            byte ret = currentStateReadBit;
+            var ret = currentStateReadBit;
             currentStateReadBit >>= 1;
             return (byte)(ret & 0x1);
         }

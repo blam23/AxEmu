@@ -15,15 +15,15 @@
 
         public void Clock(bool enable)
         {
-            if (enable)
+            if (!enable) 
+                return;
+            
+            timer--;
+            if (timer == 0xFFFF)
             {
-                timer--;
-                if (timer == 0xFFFF)
-                {
-                    timer = (ushort)(reload + 1);
-                    var ns = manipulator(sequence);
-                    output = (byte)(sequence & 1);
-                }
+                timer = (ushort)(reload + 1);
+                var ns = manipulator(sequence);
+                output = (byte)(ns & 1);
             }
         }
     }

@@ -118,7 +118,7 @@ namespace AxEmu.NES.Mappers
             if (system == null)
                 throw new InvalidOperationException("Attempted to write to uninitialised mapper");
 
-            bool addressEven = (address & 0x0001) == 0;
+            var addressEven = (address & 0x0001) == 0;
 
             if (address >= 0x6000 && address < 0x8000)
             {

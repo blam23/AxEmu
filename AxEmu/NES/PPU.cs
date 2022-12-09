@@ -130,7 +130,7 @@ namespace AxEmu.NES
             scrollX = nextScrollX;
             scrollY = nextScrollY;
 
-            bool solidBG = false;
+            var solidBG = false;
             if (ShowBackground)
                 solidBG = renderPixelBackground();
 
@@ -427,9 +427,9 @@ namespace AxEmu.NES
             var line = scanline + 1;
 
             currentSprites.Clear();
-            uint height = CurrentSpriteSize == SpriteSize.s8x16 ? 16u : 8u;
+            var height = CurrentSpriteSize == SpriteSize.s8x16 ? 16u : 8u;
 
-            for (int i = 0; i < OAM.Length; i+=4)
+            for (var i = 0; i < OAM.Length; i+=4)
             {
                 var y = (byte)(OAM[i] + 1);
 
@@ -466,7 +466,7 @@ namespace AxEmu.NES
             if (x >= RenderWidth || scanline >= RenderHeight)
                 return;
 
-            bool tallSprites = CurrentSpriteSize == SpriteSize.s8x16;
+            var tallSprites = CurrentSpriteSize == SpriteSize.s8x16;
 
             foreach (var sprite in currentSprites)
             {
@@ -486,11 +486,11 @@ namespace AxEmu.NES
                 var flipY    = (sprite.attr & 0x80) == 0x80;
 
                 // Figure out which pixel in the sprite we're rendering
-                byte pixelX = (byte)(x - sprite.x);
-                byte pixelY = (byte)(scanline - sprite.y);
+                var pixelX = (byte)(x - sprite.x);
+                var pixelY = (byte)(scanline - sprite.y);
 
                 // Find out what table addr to use
-                ushort table = tallSprites ?
+                var table = tallSprites ?
                                (ushort)((sprite.idx & 1) * 1000) :
                                SpriteTableAddr;
 
@@ -513,15 +513,15 @@ namespace AxEmu.NES
                 pixelY = flipY ? (byte)(7 - pixelY) : pixelY;
 
                 // Calc colour address
-                ushort address = (ushort)(table + tile + pixelY);
+                var address = (ushort)(table + tile + pixelY);
 
                 //var tbl = address >= 0x1000 ? VRAMPage1000 : VRAMPage0000;
                 //var upperBit = (tbl[(address + 8) % 0x1000] & (0x80u >> pixelX)) >> (7 - pixelX);
                 //var lowerBit = (tbl[address % 0x1000] & (0x80ul >> pixelX)) >> (7 - pixelX);
 
-                byte upperBit = (byte)((mem.Read((ushort)(address + 8)) & (0x80u >> pixelX)) >> (7 - pixelX));
-                byte lowerBit = (byte)((mem.Read(address)               & (0x80u >> pixelX)) >> (7 - pixelX));
-                byte colour = (byte)((upperBit << 1) | lowerBit);
+                var upperBit = (byte)((mem.Read((ushort)(address + 8)) & (0x80u >> pixelX)) >> (7 - pixelX));
+                var lowerBit = (byte)((mem.Read(address)               & (0x80u >> pixelX)) >> (7 - pixelX));
+                var colour = (byte)((upperBit << 1) | lowerBit);
                 
                 if (colour > 0)
                 {
@@ -595,16 +595,16 @@ namespace AxEmu.NES
 
             var colourBits = (attr >> (byte)((quadX * 2) + (quadY * 4))) & 0x3;
 
-            ushort entry = (ushort)(BackTableAddr + nametableEntry * 0x10 + ((int)oy % 8));
+            var entry = (ushort)(BackTableAddr + nametableEntry * 0x10 + ((int)oy % 8));
 
-            byte firstPlaneByte = mem.Read(entry);
-            byte secondPlaneByte = mem.Read((ushort)(entry + 8));
+            var firstPlaneByte = mem.Read(entry);
+            var secondPlaneByte = mem.Read((ushort)(entry + 8));
 
             var firstPlaneBit  = (byte)((firstPlaneByte >> (byte)(7 - (ox % 8))) & 1);
             var secondPlaneBit = (byte)((secondPlaneByte >> (byte)(7 - (ox % 8))) & 1);
 
             Color pixelColour;
-            bool solid = false;
+            var solid = false;
             if (firstPlaneBit == 0 && secondPlaneBit == 0)
             {
                 pixelColour = lookupBGPalette(0);

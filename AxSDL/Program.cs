@@ -1,19 +1,33 @@
 ﻿using AxEmu.NES;
+using System.Diagnostics;
 
-bool running = true;
+var running = true;
 
-// Initialise Display
-var display = new PixelDisplay("AxNES", 256, 240, 256 * 2, 240 * 2, Silk.NET.SDL.PixelFormatEnum.Bgr24);
-var dispThread = new Thread(display.Run);
-dispThread.Start();
+var nes = new Emulator();
+var display = new SDLNESWindow(nes, 2);
 
 // Load NES
-var nes = new Emulator();
 nes.LoadROM("D:\\Test\\NES\\mario.nes");
 
 nes.FrameCompleted += display.SetPixels;
 
-while(running)
+var dispThread = new Thread(() =>
 {
-    nes.Clock();
-}
+    while (running)
+    {
+        var sw = Stopwatch.StartNew();
+        for (var i = 0; i < 89342; i++)
+        {
+            nes.Clock();
+        }
+        sw.Stop();
+        var elapsed = sw.ElapsedMilliseconds;
+        if (elapsed < 16)
+            Thread.Sleep((int)(16 - elapsed));
+    }
+});
+dispThread.Start();
+
+display.Run();
+
+running = false;
