@@ -1,5 +1,4 @@
-﻿
-using AxEmu.NES;
+﻿using AxEmu.NES;
 
 Emulator nes = new();
 
