@@ -1,21 +1,22 @@
-﻿using Silk.NET.Input;
+﻿using AxEmu;
 using Silk.NET.Maths;
 using Silk.NET.SDL;
 
-namespace AxEmu.NES
+namespace AxSDL
 {
-    internal unsafe class SDLNESWindow : IDisposable
+    internal unsafe class SDLEmulatorWindow : 
+        IDisposable 
     {
         // Setup SDL
         private static readonly Sdl SDL;
 
-        static SDLNESWindow()
+        static SDLEmulatorWindow()
         {
             SDL = Sdl.GetApi();
 
             var err = SDL.Init(Sdl.InitEverything);
             if (err < 0)
-                throw new Exception($"Unable to load SDL, error: {err}");
+                throw new Exception($"Unable to load SDL, error: {err}"); 
         }
 
         private Window* window;
@@ -27,58 +28,54 @@ namespace AxEmu.NES
         private Rectangle<int> emulatorRect;
         private Rectangle<int> pixelRect;
 
-        private readonly int width = 256;
-        private readonly int height = 240;
+        private readonly int width;
+        private readonly int height;
         private readonly int scale;
-        private readonly Emulator nes;
-
-        private Surface* dbgPatternTableLeft;
-        private Surface* dbgPatternTableRight;
-        private Surface* dbgNameTable;
+        private readonly IEmulator emulator;
 
         private uint audio;
 
         private bool running = true;
 
-        private Dictionary<Scancode, Action<Emulator>> keyDown = new()
+        private readonly Dictionary<Scancode, Action<IEmulator>> keyDown = new()
         {
-            { Scancode.ScancodeW,         (nes) => nes.joyPad1.PressUp() },
-            { Scancode.ScancodeA,         (nes) => nes.joyPad1.PressLeft() },
-            { Scancode.ScancodeS,         (nes) => nes.joyPad1.PressDown() },
-            { Scancode.ScancodeD,         (nes) => nes.joyPad1.PressRight() },
-            { Scancode.ScancodeReturn,    (nes) => nes.joyPad1.PressStart() },
-            { Scancode.ScancodeBackspace, (nes) => nes.joyPad1.PressSelect() },
-            { Scancode.ScancodeK,         (nes) => nes.joyPad1.PressA() },
-            { Scancode.ScancodeL,         (nes) => nes.joyPad1.PressB() },
+            { Scancode.ScancodeW,         (emu) => emu.Controller1.PressUp() },
+            { Scancode.ScancodeA,         (emu) => emu.Controller1.PressLeft() },
+            { Scancode.ScancodeS,         (emu) => emu.Controller1.PressDown() },
+            { Scancode.ScancodeD,         (emu) => emu.Controller1.PressRight() },
+            { Scancode.ScancodeReturn,    (emu) => emu.Controller1.PressStart() },
+            { Scancode.ScancodeBackspace, (emu) => emu.Controller1.PressSelect() },
+            { Scancode.ScancodeK,         (emu) => emu.Controller1.PressA() },
+            { Scancode.ScancodeL,         (emu) => emu.Controller1.PressB() },
         };
-        private Dictionary<Scancode, Action<Emulator>> keyUp = new()
+        private readonly Dictionary<Scancode, Action<IEmulator>> keyUp = new()
         {
-            { Scancode.ScancodeW,         (nes) => nes.joyPad1.ReleaseUp() },
-            { Scancode.ScancodeA,         (nes) => nes.joyPad1.ReleaseLeft() },
-            { Scancode.ScancodeS,         (nes) => nes.joyPad1.ReleaseDown() },
-            { Scancode.ScancodeD,         (nes) => nes.joyPad1.ReleaseRight() },
-            { Scancode.ScancodeReturn,    (nes) => nes.joyPad1.ReleaseStart() },
-            { Scancode.ScancodeBackspace, (nes) => nes.joyPad1.ReleaseSelect() },
-            { Scancode.ScancodeK,         (nes) => nes.joyPad1.ReleaseA() },
-            { Scancode.ScancodeL,         (nes) => nes.joyPad1.ReleaseB() },
+            { Scancode.ScancodeW,         (emu) => emu.Controller1.ReleaseUp() },
+            { Scancode.ScancodeA,         (emu) => emu.Controller1.ReleaseLeft() },
+            { Scancode.ScancodeS,         (emu) => emu.Controller1.ReleaseDown() },
+            { Scancode.ScancodeD,         (emu) => emu.Controller1.ReleaseRight() },
+            { Scancode.ScancodeReturn,    (emu) => emu.Controller1.ReleaseStart() },
+            { Scancode.ScancodeBackspace, (emu) => emu.Controller1.ReleaseSelect() },
+            { Scancode.ScancodeK,         (emu) => emu.Controller1.ReleaseA() },
+            { Scancode.ScancodeL,         (emu) => emu.Controller1.ReleaseB() },
         };
 
-        public SDLNESWindow(Emulator nes, int scale)
+        public SDLEmulatorWindow(IEmulator emulator, int scale)
         {
-            this.nes = nes;
+            this.emulator = emulator;
             this.scale = scale;
 
-            window = SDL.CreateWindow("AxNES", width, height, (width * scale) + 20 + 256 + 256 + 20, height * scale + 400, (uint)(WindowFlags.Opengl));
+            width = emulator.GetScreenWidth();
+            height = emulator.GetScreenHeight();
+
+            window = SDL.CreateWindow("AxEmu", width, height, (width * scale), height * scale, (uint)(WindowFlags.Opengl));
             renderer = SDL.CreateRenderer(window, -1, (uint)(RendererFlags.Accelerated));
             pixelSurface = SDL.CreateRGBSurfaceWithFormat(0, width, height, 0, (uint)PixelFormatEnum.Bgr24);
-            emulatorRect = new Rectangle<int>(10, 10, width * scale, height * scale);
+            emulatorRect = new Rectangle<int>(0, 0, width * scale, height * scale);
             pixelRect = new Rectangle<int>(0, 0, width, height);
             windowSurface = SDL.GetWindowSurface(window);
 
-            dbgPatternTableLeft  = SDL.CreateRGBSurfaceWithFormat(0, 128, 128, 0, (uint)PixelFormatEnum.Bgr24);
-            dbgPatternTableRight = SDL.CreateRGBSurfaceWithFormat(0, 128, 128, 0, (uint)PixelFormatEnum.Bgr24);
-            dbgNameTable         = SDL.CreateRGBSurfaceWithFormat(0, 256, 240, 0, (uint)PixelFormatEnum.Bgr24);
-
+            // TODO: Pull from IEmulator
             var settings = new AudioSpec
             {
                 Freq = 44100,
@@ -95,7 +92,7 @@ namespace AxEmu.NES
 
             var frameTimer = new Timer((e) =>
             {
-                SDL.SetWindowTitle(window, $"FPS: {audioFrames}, APS: {videoFrames}");
+                SDL.SetWindowTitle(window, $"FPS: {videoFrames}, APS: {audioFrames}");
                
                 audioFrames = 0;
                 videoFrames = 0;
@@ -116,18 +113,11 @@ namespace AxEmu.NES
 
         int audioFrames = 0;
         ulong videoFrames = 0;
-
         byte volume = 10;
 
         private void AudioTick(void* UserData, byte* buffer, int length)
         {
             audioFrames++;
-
-            for (var i = 0; i < length; i++)
-            {
-                var n = nes.GetSample();
-                *buffer++ = (byte)n;
-            }
         }
 
         private static void @throw(Func<int> sdlCall)
@@ -139,6 +129,7 @@ namespace AxEmu.NES
         public void SetPixels(byte[] data)
         {
             SDL.Memcpy(pixelSurface->Pixels, ref data[0], (nuint)data.Length);
+            videoFrames++;
         }
 
         public void Run()
@@ -151,46 +142,7 @@ namespace AxEmu.NES
                 while (SDL.PollEvent(&evt) == 1)
                     HandleEvent(evt);
 
-
-
-                if (clock == 0)
-                {
-                    var rect128 = new Rectangle<int>(0, 0, 128, 128);
-                    var leftOutRect = new Rectangle<int>((width * scale) + 20, 10, 256, 256);
-                    var rightOutRect = new Rectangle<int>((width * scale) + 20 + 256, 10, 256, 256);
-
-                    var left = nes.debug.GetPatternTableLeft();
-                    SDL.Memcpy(dbgPatternTableLeft->Pixels, ref left[0], (nuint)left.Length);
-
-                    var right = nes.debug.GetPatternTableRight();
-                    SDL.Memcpy(dbgPatternTableRight->Pixels, ref right[0], (nuint)right.Length);
-
-                    @throw(() => SDL.LowerBlitScaled(dbgPatternTableLeft, ref rect128, windowSurface, ref leftOutRect));
-                    @throw(() => SDL.LowerBlitScaled(dbgPatternTableRight, ref rect128, windowSurface, ref rightOutRect));
-                }
-
-                if (clock == 50)
-                {
-                    var rect = new Rectangle<int>(0, 0, 256, 240);
-
-                    var nameTbl1OutRect = new Rectangle<int>((width * scale) + 20, 256 + 20, 256, 240);
-                    var nameTbl2OutRect = new Rectangle<int>((width * scale) + 20 + 256, 256 + 20, 256, 240);
-                    var nameTbl3OutRect = new Rectangle<int>((width * scale) + 20, 256 + 20 + 240, 256, 240);
-                    var nameTbl4OutRect = new Rectangle<int>((width * scale) + 20 + 256, 256 + 20 + 240, 256, 240);
-                    var ntl1 = nes.debug.GetNameTable(0x2000);
-                    var ntl2 = nes.debug.GetNameTable(0x2400);
-                    var ntl3 = nes.debug.GetNameTable(0x2800);
-                    var ntl4 = nes.debug.GetNameTable(0x2C00);
-
-                    SDL.Memcpy(dbgNameTable->Pixels, ref ntl1[0], (nuint)ntl1.Length);
-                    @throw(() => SDL.LowerBlitScaled(dbgNameTable, ref rect, windowSurface, ref nameTbl1OutRect));
-                    SDL.Memcpy(dbgNameTable->Pixels, ref ntl2[0], (nuint)ntl2.Length);
-                    @throw(() => SDL.LowerBlitScaled(dbgNameTable, ref rect, windowSurface, ref nameTbl2OutRect));
-                    SDL.Memcpy(dbgNameTable->Pixels, ref ntl3[0], (nuint)ntl3.Length);
-                    @throw(() => SDL.LowerBlitScaled(dbgNameTable, ref rect, windowSurface, ref nameTbl3OutRect));
-                    SDL.Memcpy(dbgNameTable->Pixels, ref ntl4[0], (nuint)ntl4.Length);
-                    @throw(() => SDL.LowerBlitScaled(dbgNameTable, ref rect, windowSurface, ref nameTbl4OutRect));
-                }
+                //DrawDebug(clock);
 
                 @throw(() => SDL.LowerBlitScaled(pixelSurface, ref pixelRect, windowSurface, ref emulatorRect));
                 SDL.UpdateWindowSurface(window);
@@ -198,7 +150,6 @@ namespace AxEmu.NES
                 clock++;
                 clock %= 100;
 
-                videoFrames++;
             }
         }
 
@@ -245,24 +196,24 @@ namespace AxEmu.NES
             var val = jhat.Value;
 
             if ((val & JHAT_UP) == JHAT_UP)
-                nes.joyPad1.PressUp();
+                emulator.Controller1.PressUp();
             else
-                nes.joyPad1.ReleaseUp();
+                emulator.Controller1.ReleaseUp();
 
             if ((val & JHAT_RIGHT) == JHAT_RIGHT)
-                nes.joyPad1.PressRight();
+                emulator.Controller1.PressRight();
             else
-                nes.joyPad1.ReleaseRight();
+                emulator.Controller1.ReleaseRight();
 
             if ((val & JHAT_DOWN) == JHAT_DOWN)
-                nes.joyPad1.PressDown();
+                emulator.Controller1.PressDown();
             else
-                nes.joyPad1.ReleaseDown();
+                emulator.Controller1.ReleaseDown();
 
             if ((val & JHAT_LEFT) == JHAT_LEFT)
-                nes.joyPad1.PressLeft();
+                emulator.Controller1.PressLeft();
             else
-                nes.joyPad1.ReleaseLeft();
+                emulator.Controller1.ReleaseLeft();
         }
 
         private static readonly byte JBUTTON_A     = 0x00;
@@ -272,30 +223,30 @@ namespace AxEmu.NES
         private void JoyDown(JoyButtonEvent button)
         {
             if (button.Button == JBUTTON_A)
-                nes.joyPad1.PressA();
+                emulator.Controller1.PressA();
 
             if (button.Button == JBUTTON_B)
-                nes.joyPad1.PressB();
+                emulator.Controller1.PressB();
 
             if (button.Button == JBUTTON_START)
-                nes.joyPad1.PressStart();
+                emulator.Controller1.PressStart();
 
             if (button.Button == JBUTTON_SEL)
-                nes.joyPad1.PressStart();
+                emulator.Controller1.PressStart();
         }
         private void JoyUp(JoyButtonEvent button)
         {
             if (button.Button == JBUTTON_A)
-                nes.joyPad1.ReleaseA();
+                emulator.Controller1.ReleaseA();
 
             if (button.Button == JBUTTON_B)
-                nes.joyPad1.ReleaseB();
+                emulator.Controller1.ReleaseB();
 
             if (button.Button == JBUTTON_START)
-                nes.joyPad1.ReleaseStart();
+                emulator.Controller1.ReleaseStart();
 
             if (button.Button == JBUTTON_SEL)
-                nes.joyPad1.ReleaseStart();
+                emulator.Controller1.ReleaseStart();
         }
 
         private void KeyDown(KeyboardEvent kbe)
@@ -308,13 +259,13 @@ namespace AxEmu.NES
                 running = false;
 
             if (keyDown.TryGetValue(scancode, out var kda))
-                kda(nes);
+                kda(emulator);
         }
 
         private void KeyUp(KeyboardEvent kbe)
         {
             if (keyUp.TryGetValue(kbe.Keysym.Scancode, out var kda))
-                kda(nes);
+                kda(emulator);
         }
 
         private bool disposed;

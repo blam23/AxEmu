@@ -1,10 +1,11 @@
 ﻿using AxEmu.NES;
+using AxSDL;
 using System.Diagnostics;
 
 var running = true;
 
 var nes = new Emulator();
-var display = new SDLNESWindow(nes, 2);
+var display = new SDLEmulatorWindow(nes, 2);
 
 // Load NES
 nes.LoadROM("D:\\Test\\NES\\mario.nes");
