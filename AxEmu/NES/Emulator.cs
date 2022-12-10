@@ -1,10 +1,9 @@
-﻿using AxEmu.NES.Mappers;
-using System.Diagnostics;
+﻿using System.Diagnostics;
 using System.Reflection;
 
 namespace AxEmu.NES
 {
-    public class Emulator
+    public class Emulator : IEmulator
     {
         // Components
         internal Cart cart = new();
@@ -15,8 +14,10 @@ namespace AxEmu.NES
         internal IMapper mapper;
 
         // Inputs
-        public JoyPad joyPad1;
-        public JoyPad joyPad2;
+        internal JoyPad joyPad1;
+        internal JoyPad joyPad2;
+        public IController Controller1 => joyPad1;
+        public IController Controller2 => joyPad2;
 
         // Data
         private Mirroring mirroring = Mirroring.Horizontal;
@@ -25,12 +26,14 @@ namespace AxEmu.NES
             get { return mirroring; } 
             set { mirroring = value; ppu.UpdateMirroring(); } 
         }
+        public bool Unloaded() => mapper == null;
 
         // Helpers
         public Debugger debug;
+        public int GetScreenWidth() => 256;
+        public int GetScreenHeight() => 240;
 
         // Events
-        public delegate void FrameEvent(byte[] bitmap);
         public event FrameEvent? FrameCompleted;
 
         // Control
@@ -61,11 +64,14 @@ namespace AxEmu.NES
             cpu = new CPU(cpuBus);
             ppu = new PPU(this);
             apu = new APU(this);
+
             joyPad1 = new JoyPad(this);
             joyPad2 = new JoyPad(this);
+
             debug = new Debugger(this);
 
             LoadMappers();
+            mapper = CreateMapper(0);
             ppu.FrameCompleted += OnFrameCompleted;
         }
 
@@ -99,7 +105,7 @@ namespace AxEmu.NES
         }
 
 
-        private void Reset()
+        public void Reset()
         {
             // TODO: Signal stop & wait for any running crap to end
         }
@@ -124,8 +130,6 @@ namespace AxEmu.NES
 
             cpu.Init();
         }
-
-
 
         private ulong clock = 0;
         public void Clock()
@@ -172,9 +176,5 @@ namespace AxEmu.NES
             }
         }
 
-        public bool Unloaded()
-        {
-            return mapper == null;
-        }
     }
 }

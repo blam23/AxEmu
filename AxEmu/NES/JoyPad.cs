@@ -1,12 +1,6 @@
-﻿using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Text;
-using System.Threading.Tasks;
-
-namespace AxEmu.NES
+﻿namespace AxEmu.NES
 {
-    public class JoyPad
+    public class JoyPad : IController
     {
         internal readonly Emulator system;
 
