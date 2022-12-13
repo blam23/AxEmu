@@ -9,7 +9,7 @@ internal partial class CPU
     //
     // Data
     //
-    MemoryBus bus;
+    readonly MemoryBus bus;
 
     //
     // Initialisation
@@ -134,6 +134,27 @@ internal partial class CPU
     //
     // Helpers
     //
+    private void PushByte(byte value)
+    {
+        bus.Write(--SP, value);
+    }
+
+    private void PushWord(ushort value)
+    {
+        bus.Write(--SP, Byte.upper(value));
+        bus.Write(--SP, Byte.lower(value));
+    }
+
+    private byte PopByte()
+    {
+        return bus.Read(SP++);
+    }
+
+    private ushort PopWord()
+    {
+        return Byte.combineR(PopByte(), PopByte());
+    }
+
     private byte Imm() => bus.Read((ushort)(PC + 1));
     private ushort Abs() => bus.ReadWord((ushort)(PC + 1));
 
@@ -152,8 +173,8 @@ internal partial class CPU
             Data.Imm => Imm(),
 
             Data.Ind_Abs => bus.Read(Abs()),
-            Data.Ind_Imm => bus.Read((ushort)(0xFF | Imm())),
-            Data.Ind_C   => bus.Read((ushort)(0xFF | C)),
+            Data.Ind_Imm => bus.Read(Byte.combine(0xFF, Imm())),
+            Data.Ind_C   => bus.Read(Byte.combine(0xFF, C)),
             Data.Ind_BC  => bus.Read(BC),
             Data.Ind_DE  => bus.Read(DE),
             Data.Ind_HL  => bus.Read(HL),
@@ -198,8 +219,8 @@ internal partial class CPU
             case Data.SP: SP = ParamWord(); break;
 
             case Data.Ind_Abs: bus.Write(Abs(), ParamByte()); break;
-            case Data.Ind_Imm: bus.Write((ushort)(0xFF | Imm()), ParamByte()); break;
-            case Data.Ind_C:   bus.Write((ushort)(0xFF | C), ParamByte()); break;
+            case Data.Ind_Imm: bus.Write(Byte.combine(0xFF, Imm()), ParamByte()); break;
+            case Data.Ind_C:   bus.Write(Byte.combine(0xFF, C), ParamByte()); break;
             case Data.Ind_BC:  bus.Write(BC, ParamByte()); break;
             case Data.Ind_DE:  bus.Write(DE, ParamByte()); break;
             case Data.Ind_HL:  bus.Write(HL, ParamByte()); break;
@@ -252,6 +273,13 @@ internal partial class CPU
         };
     }
 
+    private void RetImpl()
+    {
+        jumped = true;
+
+        PC = (ushort)(PopWord() + 3);
+    }
+
     private void AddImpl(bool carry = false)
     {
         // Only A is used as output for addition
@@ -296,6 +324,25 @@ internal partial class CPU
         flags.Z = A == 0;
     }
 
+    private void CpImpl()
+    {
+        // Only A is used as output for subtraction
+        if (current.Output != Data.A)
+            throw new InvalidOperationException();
+
+        // Get our operand
+        var operand = ParamByte() + (flags.C ? 1 : 0);
+
+        // Sub operand from A and store in int so we went negative
+        var result = A - operand;
+
+        // Set flags
+        flags.C = result < 0x00;
+        flags.H = result < 0x0F;
+        flags.N = true;
+        flags.Z = A == 0;
+    }
+
     private void XorImpl()
     {
         // Only A is used as output for XOR
@@ -310,6 +357,59 @@ internal partial class CPU
 
         // Set flags
         flags.Z = A == 0;
+        flags.N = false;
+        flags.H = false;
+        flags.C = false;
+    }
+
+    private void CplImpl()
+    {
+        // Only A is used as output for CPL
+        if (current.Output != Data.A)
+            throw new InvalidOperationException();
+
+        A = (byte)~A;
+
+        flags.N = true;
+        flags.H = true;
+    }
+
+    private void OrImpl()
+    {
+        // Only A is used as output for XOR
+        if (current.Output != Data.A)
+            throw new InvalidOperationException();
+
+        // Get our operand
+        var operand = ParamByte();
+
+        // Do OR
+        A |= operand;
+
+        // Set flags
+        flags.Z = A == 0;
+        flags.N = false;
+        flags.H = false;
+        flags.C = false;
+    }
+
+    private void AndImpl()
+    {
+        // Only A is used as output for XOR
+        if (current.Output != Data.A)
+            throw new InvalidOperationException();
+
+        // Get our operand
+        var operand = ParamByte();
+
+        // Do OR
+        A &= operand;
+
+        // Set flags
+        flags.Z = A == 0;
+        flags.N = true;
+        flags.H = false;
+        flags.C = false;
     }
 
     private void DecImpl()
@@ -374,5 +474,54 @@ internal partial class CPU
         flags.Z = result == 0;
         flags.N = true;
         flags.H = result > 0x0F;
+    }
+
+    private void RRImpl(bool carry)
+    {
+        (A, flags.C) = Byte.ror(A, carry && flags.C);
+
+        flags.Z = false;
+        flags.H = false;
+        flags.N = false;
+    }
+
+    private void RLImpl(bool carry)
+    {
+        (A, flags.C) = Byte.rol(A, carry && flags.C);
+
+        flags.Z = false;
+        flags.H = false;
+        flags.N = false;
+    }
+
+    private void RstImpl()
+    {
+        PushWord(PC);
+
+        // Could be done with maffs innit, oh well
+        byte n = current.OPCode switch
+        {
+            0xC7 => 0x00,
+            0xD7 => 0x10,
+            0xE7 => 0x20,
+            0xF7 => 0x30,
+            0xCF => 0x08,
+            0xDF => 0x18,
+            0xEF => 0x28,
+            0xFF => 0x38,
+            
+            _ => throw new InvalidOperationException(),
+        };
+
+        PC = Byte.combine(0x00, n);
+
+        jumped = true;
+    }
+
+    private void CallImpl()
+    {
+        PushWord(PC);
+        PC = ParamWord();
+        jumped = true;
     }
 }
