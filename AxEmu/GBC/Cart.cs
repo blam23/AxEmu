@@ -14,6 +14,7 @@ internal class Cart
     }
 
     internal readonly byte[] rom = Array.Empty<byte>();
+    internal readonly byte[] ram = new byte[0x2000];
     private readonly State state = State.Unloaded;
     public State LoadState => state;
 
