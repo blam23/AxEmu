@@ -51,6 +51,7 @@ internal partial class CPU
 
     internal class Instruction
     {
+        public byte OPCode;
         public string Name = "";
         public int Cycles;
         public ushort Size;
@@ -62,6 +63,7 @@ internal partial class CPU
 
         public Instruction(CPU cpu, InstructionAttribute attr, System.Reflection.MethodInfo method)
         {
+            OPCode    = attr.OPCode;
             Name      = PrettyName(attr, method.Name);
             Size      = CalcSize(attr);
             Cycles    = attr.Cycles;
@@ -72,15 +74,24 @@ internal partial class CPU
             action = (Action)Delegate.CreateDelegate(typeof(Action), cpu, method);
         }
 
+        private static byte GetDataLen(Data data)
+        {
+            return data switch
+            {
+                Data.Imm => 1,
+                Data.Ind_Imm => 1,
+                Data.Abs => 2,
+                Data.Ind_Abs => 2,
+                _ => 0,
+            }; ;
+        }
+
         private static ushort CalcSize(InstructionAttribute attr)
         {
-            return attr.Input switch
-            {
-                Data.Imm => 2,
-                Data.Ind_Imm => 2,
-                Data.Abs => 3,
-                _ => 1,
-            };
+            var inSize  = GetDataLen(attr.Input);
+            var outSize = GetDataLen(attr.Output);
+
+            return (ushort)(1 + inSize + outSize);
         }
 
         // TODO: Yikes
@@ -121,6 +132,9 @@ internal partial class CPU
             {
                 if (a is InstructionAttribute instr)
                 {
+                    if (instructions[instr.OPCode] != null)
+                        throw new InvalidDataException($"Duplicate opcode: '{instr.OPCode}' registered twice.");
+
                     instructions[instr.OPCode] = new Instruction(this, instr, method);
                     Console.WriteLine($"Registering OPCode: {instr.OPCode:X2} -> {instructions[instr.OPCode].Name}");
                 }
@@ -260,6 +274,9 @@ internal partial class CPU
 
     [Instruction(OPCode = 0xEA, Cycles = 16, Output = Data.Ind_Abs, Input = Data.A)]
     [Instruction(OPCode = 0xFA, Cycles = 16, Output = Data.A,       Input = Data.Ind_Abs)]
+
+    [Instruction(OPCode = 0xE2, Cycles = 8,  Output = Data.Ind_C,   Input = Data.A)]
+    [Instruction(OPCode = 0xF2, Cycles = 8,  Output = Data.A,       Input = Data.Ind_C)]
     public void LD() => Write();
 
     //
@@ -269,6 +286,19 @@ internal partial class CPU
     // Note Cycles is 12 here because jumping always adds 4, so total will be 16
     [Instruction(OPCode = 0xC3, Cycles = 12, Input = Data.Abs)]
     public void JMP() => JmpImpl();
+
+    [Instruction(OPCode = 0xC9, Cycles = 12)]
+    public void RET() => RetImpl();
+
+    // Note Cycles is 12 here because jumping always adds 4, so total will be 16
+    [Instruction(OPCode = 0xCF, Cycles = 12)]
+    [Instruction(OPCode = 0xDF, Cycles = 12)]
+    [Instruction(OPCode = 0xEF, Cycles = 12)]
+    [Instruction(OPCode = 0xFF, Cycles = 12)]
+    public void RST() => RstImpl();
+
+    [Instruction(OPCode = 0xCD, Cycles = 20, Input = Data.Abs)]
+    public void CALL() => CallImpl();
 
     [Instruction(OPCode = 0xCA, Name = "JMP Z",  Cycles = 12, Condition = Conditional.Z,  Input = Data.Abs)]
     [Instruction(OPCode = 0xC2, Name = "JMP NZ", Cycles = 12, Condition = Conditional.NZ, Input = Data.Abs)]
@@ -327,6 +357,17 @@ internal partial class CPU
     [Instruction(OPCode = 0x9F, Cycles = 4, Output = Data.A, Input = Data.A)]
     public void SBC() => SubImpl(true);
 
+    [Instruction(OPCode = 0xB8, Cycles = 4, Output = Data.A, Input = Data.B)]
+    [Instruction(OPCode = 0xB9, Cycles = 4, Output = Data.A, Input = Data.C)]
+    [Instruction(OPCode = 0xBA, Cycles = 4, Output = Data.A, Input = Data.D)]
+    [Instruction(OPCode = 0xBB, Cycles = 4, Output = Data.A, Input = Data.E)]
+    [Instruction(OPCode = 0xBC, Cycles = 4, Output = Data.A, Input = Data.H)]
+    [Instruction(OPCode = 0xBD, Cycles = 4, Output = Data.A, Input = Data.L)]
+    [Instruction(OPCode = 0xBE, Cycles = 8, Output = Data.A, Input = Data.Ind_HL)]
+    [Instruction(OPCode = 0xBF, Cycles = 4, Output = Data.A, Input = Data.A)]
+    [Instruction(OPCode = 0xFE, Cycles = 8, Output = Data.A, Input = Data.Imm)]
+    public void CP() => CpImpl();
+
     [Instruction(OPCode = 0xA8, Cycles = 4, Output = Data.A, Input = Data.B)]
     [Instruction(OPCode = 0xA9, Cycles = 4, Output = Data.A, Input = Data.C)]
     [Instruction(OPCode = 0xAA, Cycles = 4, Output = Data.A, Input = Data.D)]
@@ -336,6 +377,27 @@ internal partial class CPU
     [Instruction(OPCode = 0xAE, Cycles = 8, Output = Data.A, Input = Data.Ind_HL)]
     [Instruction(OPCode = 0xAF, Cycles = 4, Output = Data.A, Input = Data.A)]
     public void XOR() => XorImpl();
+
+    [Instruction(OPCode = 0xB0, Cycles = 4, Output = Data.A, Input = Data.B)]
+    [Instruction(OPCode = 0xB1, Cycles = 4, Output = Data.A, Input = Data.C)]
+    [Instruction(OPCode = 0xB2, Cycles = 4, Output = Data.A, Input = Data.D)]
+    [Instruction(OPCode = 0xB3, Cycles = 4, Output = Data.A, Input = Data.E)]
+    [Instruction(OPCode = 0xB4, Cycles = 4, Output = Data.A, Input = Data.H)]
+    [Instruction(OPCode = 0xB5, Cycles = 4, Output = Data.A, Input = Data.L)]
+    [Instruction(OPCode = 0xB6, Cycles = 8, Output = Data.A, Input = Data.Ind_HL)]
+    [Instruction(OPCode = 0xB7, Cycles = 8, Output = Data.A, Input = Data.A)]
+    public void OR() => OrImpl();
+
+    [Instruction(OPCode = 0xA0, Cycles = 4, Output = Data.A, Input = Data.B)]
+    [Instruction(OPCode = 0xA1, Cycles = 4, Output = Data.A, Input = Data.C)]
+    [Instruction(OPCode = 0xA2, Cycles = 4, Output = Data.A, Input = Data.D)]
+    [Instruction(OPCode = 0xA3, Cycles = 4, Output = Data.A, Input = Data.E)]
+    [Instruction(OPCode = 0xA4, Cycles = 4, Output = Data.A, Input = Data.H)]
+    [Instruction(OPCode = 0xA5, Cycles = 4, Output = Data.A, Input = Data.L)]
+    [Instruction(OPCode = 0xA6, Cycles = 8, Output = Data.A, Input = Data.Ind_HL)]
+    [Instruction(OPCode = 0xA7, Cycles = 8, Output = Data.A, Input = Data.A)]
+    [Instruction(OPCode = 0xE6, Cycles = 8, Output = Data.A, Input = Data.Imm)]
+    public void AND() => AndImpl();
 
     [Instruction(OPCode = 0x05, Cycles = 4,  Input = Data.B)]
     [Instruction(OPCode = 0x15, Cycles = 4,  Input = Data.D)]
@@ -364,6 +426,21 @@ internal partial class CPU
     [Instruction(OPCode = 0x23, Cycles = 8,  Input = Data.HL)]
     [Instruction(OPCode = 0x33, Cycles = 8,  Input = Data.SP)]
     public void INC() => IncImpl();
+
+    [Instruction(OPCode = 0x0F, Name = "RRCA", Cycles = 4, Output = Data.A)]
+    public void RRCA() => RRImpl(true);
+
+    [Instruction(OPCode = 0x1F, Name = "RRA", Cycles = 4, Output = Data.A)]
+    public void RRA() => RRImpl(false);
+
+    [Instruction(OPCode = 0x07, Name = "RRCA", Cycles = 4, Output = Data.A)]
+    public void RLCA() => RLImpl(true);
+
+    [Instruction(OPCode = 0x17, Name = "RRA", Cycles = 4, Output = Data.A)]
+    public void RLA() => RLImpl(false);
+
+    [Instruction(OPCode = 0x2F, Cycles = 8, Output = Data.A)]
+    public void CPL() => CplImpl();
 
     //
     // Arithmetic (16-bit)
