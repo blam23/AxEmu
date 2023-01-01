@@ -1,30 +1,72 @@
-﻿using AxEmu.NES;
+﻿using AxEmu;
 using AxSDL;
-using System.Diagnostics;
 
 var running = true;
+var runNES = false;
+var runGBC = true;
 
-var nes = new Emulator();
-var display = new SDLEmulatorWindow(nes, 2);
+IEmulator emu;
 
-// Load NES
-nes.LoadROM("D:\\Test\\NES\\mario.nes");
+AxEmu.GBC.Emulator? gbc = null;
 
-nes.FrameCompleted += display.SetPixels;
+if (runNES)
+{
+    var nes = new AxEmu.NES.Emulator();
+    emu = nes;
+
+    // Load NES
+    nes.LoadROM("D:\\Test\\NES\\mario.nes");
+}
+else if (runGBC)
+{
+    gbc = new AxEmu.GBC.Emulator();
+    emu = gbc;
+
+    //gbc.LoadROM("D:\\Test\\GBC\\tetris.gb");
+    //gbc.LoadROM(@"D:\Test\GBC\game-boy-test-roms-v5.1\little-things-gb\firstwhite.gb");
+    //gbc.LoadROM(@"D:\Test\GBC\game-boy-test-roms-v5.1\mooneye-test-suite\acceptance\instr\daa.gb");
+    //gbc.LoadROM(@"D:\Test\GBC\game-boy-test-roms-v5.1\dmg-acid2\dmg-acid2.gb");
+    gbc.LoadROM("D:\\Test\\GBC\\drmario.gb");
+}
+
+else
+{
+    throw new Exception("No Emulator selected");
+}
+
+var display = new SDLMain(emu, 4);
+emu.FrameCompleted += (b) => { display.SetPixels(b); SDLGBCDebug.Update(); };
+
+bool printCPU = false;
+
+if (runGBC && gbc is not null)
+{
+    SDLGBCDebug.Init(gbc, display);
+
+    display.AddKeyUpCall(Silk.NET.SDL.Scancode.ScancodeF1, (e) => { (e as AxEmu.GBC.Emulator)?.debug.ToggleSlowMode(); });
+    display.AddKeyUpCall(Silk.NET.SDL.Scancode.ScancodeF2, (e) => { printCPU = !printCPU; });
+}
 
 var dispThread = new Thread(() =>
 {
+    //var sw = Stopwatch.StartNew();
+    //long targetMS = (long)(1000 / emu.FramesPerSecond);
     while (running)
     {
-        var sw = Stopwatch.StartNew();
-        for (var i = 0; i < 89342; i++)
+        for (var i = 0; i < emu.CyclesPerFrame; i++)
         {
-            nes.Clock();
+            if (printCPU && gbc is not null)
+                Console.WriteLine(gbc.debug.CPUStatus());
+
+            emu.Clock();
         }
-        sw.Stop();
-        var elapsed = sw.ElapsedMilliseconds;
-        if (elapsed < 16)
-            Thread.Sleep((int)(16 - elapsed));
+
+
+        //var elapsed = sw.ElapsedMilliseconds;
+        //if (elapsed < targetMS)
+        //Thread.Sleep((int)(targetMS - elapsed));
+
+        //sw.Reset();
     }
 });
 dispThread.Start();
@@ -32,3 +74,5 @@ dispThread.Start();
 display.Run();
 
 running = false;
+
+display.Dispose();

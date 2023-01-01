@@ -18,6 +18,7 @@ internal class Cart
     private readonly State state = State.Unloaded;
     public State LoadState => state;
 
+    public bool CGB = false;
     public bool SGBFlag  = false;
     public byte CartType = 0;
     public byte ROMSize  = 0;
@@ -64,7 +65,11 @@ internal class Cart
         ROMSize  = data[0x0148];
         RAMSize  = data[0x0149];
 
+        // CGB flag can be either 0x80 or 0xC0, bit 6 is ignored.
+        CGB = (data[0x0143] | 0x40) == 0xC0; 
+
         Console.WriteLine($"Title:    '{title}'");
+        Console.WriteLine($"CGB Game: {(CGB ? 'T' : 'F')}");
         Console.WriteLine($"CartType: {CartType:X2}");
         Console.WriteLine($"ROMSize:  {ROMSize:X2} ({(1024*32) << ROMSize:X}KB)");
         Console.WriteLine($"RAMSize:  {RAMSize:X2} ({GetRAMinKB()}KB)");

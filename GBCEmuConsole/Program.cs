@@ -4,7 +4,7 @@ Emulator gbc = new();
 
 gbc.LoadROM("D:\\Test\\GBC\\tetris.gb");
 
-var readKey = false;
+var readKey = true;
 var printCpu = true;
 
 ulong i = 0;
@@ -19,9 +19,25 @@ while (true)
 
         if (key.Key == ConsoleKey.Escape)
             break;
+
+        if(key.Key == ConsoleKey.M)
+            Console.WriteLine(gbc.debug.SurroundingMemory());
     }
 
-    gbc.Clock();
+    try
+    {
+        gbc.Clock();
+    }
+    catch(Exception ex)
+    {
+        Console.WriteLine();
+        using (_ = new AxEmu.ConsoleColour(ConsoleColor.DarkRed, ConsoleColor.White))
+            Console.WriteLine($"\n <ERROR> {ex.Message}\n");
+
+        Console.WriteLine(gbc.debug.SurroundingMemory());
+        
+        throw;
+    }
 
     i++;
 }

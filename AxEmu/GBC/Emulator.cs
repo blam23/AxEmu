@@ -1,17 +1,24 @@
-﻿namespace AxEmu.GBC;
+﻿using System.Drawing;
+
+namespace AxEmu.GBC;
 
 public class Emulator : IEmulator
 {
     public int GetScreenWidth() => 160;
     public int GetScreenHeight() => 144;
+    public int CyclesPerFrame => PPU.OneFrameInDots;
+    public double FramesPerSecond => 59.7;
 
     public IController Controller1 => throw new NotImplementedException();
     public IController Controller2 => throw new NotImplementedException();
 
     public event FrameEvent? FrameCompleted;
+    protected virtual void OnFrameCompleted(byte[] bitmap) => FrameCompleted?.Invoke(bitmap);
 
     // Components
     internal CPU cpu;
+    internal PPU ppu;
+    internal DMA dma;
     internal MemoryBus bus;
     internal Cart cart;
     public Debugger debug;
@@ -25,9 +32,13 @@ public class Emulator : IEmulator
         debug = new(this);
         bus   = new(this);
         cpu   = new(bus);
+        ppu   = new(this);
+        dma   = new(bus);
 
         if (bootROMFile != null)
             LoadBootROM(bootROMFile);
+
+        ppu.FrameCompleted += OnFrameCompleted;
     }
 
     private void LoadBootROM(string bootROMFile)
@@ -39,6 +50,12 @@ public class Emulator : IEmulator
     public void Clock()
     {
         cpu.Clock();
+        dma.Clock();
+
+        for(var i = 0; i < cpu.CyclesLastClock; i+= 4) 
+        {
+            ppu.Clock();
+        }
     }
 
     public void Reset()

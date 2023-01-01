@@ -175,7 +175,7 @@ namespace AxEmu.NES.Mappers
                     prgPageLookup[1] = (ushort)((registers[7] & 0x3F) * 0x2000);
                     prgPageLookup[3] = (ushort)(((system.cart.prgRomSize * 2) - 1) * 0x2000);
 
-                    using(Debug.ConsoleColour.Error())
+                    using(ConsoleColour.Error())
                     {
                         Console.WriteLine($"<!> Changing MMC3 Lookups, r[{targetRegister:X2}] = {value:X2};");
                         system.debug.DumpMMC3Lookups();

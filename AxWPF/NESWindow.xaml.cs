@@ -1,6 +1,5 @@
 ﻿using Microsoft.Win32;
 using System.IO;
-using System.Security.Cryptography;
 using System.Threading;
 using System.Windows;
 using System.Windows.Media;
@@ -151,35 +150,35 @@ namespace AxWPF
             switch(e.Key)
             {
                 case System.Windows.Input.Key.Up:
-                    Application.Current.Dispatcher.BeginInvoke(() => nes.joyPad1.PressUp());
+                    Application.Current.Dispatcher.BeginInvoke(() => nes.Controller1.PressUp());
                     e.Handled = true;
                     break;
                 case System.Windows.Input.Key.Down:
-                    Application.Current.Dispatcher.BeginInvoke(() => nes.joyPad1.PressDown());
+                    Application.Current.Dispatcher.BeginInvoke(() => nes.Controller1.PressDown());
                     e.Handled = true;
                     break;
                 case System.Windows.Input.Key.Left:
-                    Application.Current.Dispatcher.BeginInvoke(() => nes.joyPad1.PressLeft());
+                    Application.Current.Dispatcher.BeginInvoke(() => nes.Controller1.PressLeft());
                     e.Handled = true;
                     break;
                 case System.Windows.Input.Key.Right:
-                    Application.Current.Dispatcher.BeginInvoke(() => nes.joyPad1.PressRight());
+                    Application.Current.Dispatcher.BeginInvoke(() => nes.Controller1.PressRight());
                     e.Handled = true;
                     break;
                 case System.Windows.Input.Key.J:
-                    Application.Current.Dispatcher.BeginInvoke(() => nes.joyPad1.PressStart());
+                    Application.Current.Dispatcher.BeginInvoke(() => nes.Controller1.PressStart());
                     e.Handled = true;
                     break;
                 case System.Windows.Input.Key.S:
-                    Application.Current.Dispatcher.BeginInvoke(() => nes.joyPad1.PressSelect());
+                    Application.Current.Dispatcher.BeginInvoke(() => nes.Controller1.PressSelect());
                     e.Handled = true;
                     break;
                 case System.Windows.Input.Key.F:    
-                    Application.Current.Dispatcher.BeginInvoke(() => nes.joyPad1.PressA());
+                    Application.Current.Dispatcher.BeginInvoke(() => nes.Controller1.PressA());
                     e.Handled = true;
                     break;
                 case System.Windows.Input.Key.D:
-                    Application.Current.Dispatcher.BeginInvoke(() => nes.joyPad1.PressB());
+                    Application.Current.Dispatcher.BeginInvoke(() => nes.Controller1.PressB());
                     e.Handled = true;
                     break;
                 case System.Windows.Input.Key.L:
@@ -201,35 +200,35 @@ namespace AxWPF
             switch (e.Key)
             {
                 case System.Windows.Input.Key.Up:
-                    Application.Current.Dispatcher.BeginInvoke(() => nes.joyPad1.ReleaseUp());
+                    Application.Current.Dispatcher.BeginInvoke(() => nes.Controller1.ReleaseUp());
                     e.Handled = true;
                     break;
                 case System.Windows.Input.Key.Down:
-                    Application.Current.Dispatcher.BeginInvoke(() => nes.joyPad1.ReleaseDown());
+                    Application.Current.Dispatcher.BeginInvoke(() => nes.Controller1.ReleaseDown());
                     e.Handled = true;
                     break;
                 case System.Windows.Input.Key.Left:
-                    Application.Current.Dispatcher.BeginInvoke(() => nes.joyPad1.ReleaseLeft());
+                    Application.Current.Dispatcher.BeginInvoke(() => nes.Controller1.ReleaseLeft());
                     e.Handled = true;
                     break;
                 case System.Windows.Input.Key.Right:
-                    Application.Current.Dispatcher.BeginInvoke(() => nes.joyPad1.ReleaseRight());
+                    Application.Current.Dispatcher.BeginInvoke(() => nes.Controller1.ReleaseRight());
                     e.Handled = true;
                     break;
                 case System.Windows.Input.Key.J:
-                    Application.Current.Dispatcher.BeginInvoke(() => nes.joyPad1.ReleaseStart());
+                    Application.Current.Dispatcher.BeginInvoke(() => nes.Controller1.ReleaseStart());
                     e.Handled = true;
                     break;
                 case System.Windows.Input.Key.S:
-                    Application.Current.Dispatcher.BeginInvoke(() => nes.joyPad1.ReleaseSelect());
+                    Application.Current.Dispatcher.BeginInvoke(() => nes.Controller1.ReleaseSelect());
                     e.Handled = true;
                     break;
                 case System.Windows.Input.Key.F:
-                    Application.Current.Dispatcher.BeginInvoke(() => nes.joyPad1.ReleaseA());
+                    Application.Current.Dispatcher.BeginInvoke(() => nes.Controller1.ReleaseA());
                     e.Handled = true;
                     break;
                 case System.Windows.Input.Key.D:
-                    Application.Current.Dispatcher.BeginInvoke(() => nes.joyPad1.ReleaseB());
+                    Application.Current.Dispatcher.BeginInvoke(() => nes.Controller1.ReleaseB());
                     e.Handled = true;
                     break;
                 default:

@@ -13,5 +13,8 @@
 
         IController Controller1 { get; }
         IController Controller2 { get; }
+
+        int CyclesPerFrame { get; }
+        double FramesPerSecond { get; }
     }
 }

@@ -33,6 +33,9 @@ namespace AxEmu.NES
         public int GetScreenWidth() => 256;
         public int GetScreenHeight() => 240;
 
+        public int CyclesPerFrame => 89342;
+        public double FramesPerSecond => 60;
+
         // Events
         public event FrameEvent? FrameCompleted;
 
