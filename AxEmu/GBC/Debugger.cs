@@ -39,7 +39,7 @@ public class Debugger
         name = name.Replace("Abs", $"${system.bus.ReadWord((ushort)(system.cpu.PC + 1)):X4}");
         name = name.Replace("Imm", $"0x{system.bus.Read((ushort)(system.cpu.PC + 1)):X2}");
 
-        return name;
+        return $"{inst:X2} -> " +  name;
     }
 
     public string CPUStatus()

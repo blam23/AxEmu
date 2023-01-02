@@ -339,7 +339,7 @@ internal partial class CPU
             case Data.Abs: bus.Write(Abs(), val); break;
 
             default:
-                break;
+                throw new InvalidOperationException();
         }
     }
 
@@ -356,8 +356,10 @@ internal partial class CPU
             case Data.AF: AF = val; break;
             case Data.SP: SP = val; break;
 
+            case Data.Ind_Abs: bus.WriteWord(Abs(), val); break;
+
             default:
-                break;
+                throw new InvalidOperationException();
         }
     }
 
@@ -494,7 +496,7 @@ internal partial class CPU
         // Set flags
         flags.C = result > 0xFF;
         flags.N = false;
-        flags.H = flags.C || ((((A & 0xF) + (operand & 0xF)) & 0x10) == 0x10);
+        flags.H = ((((A & 0xF) + (operand & 0xF)) & 0x10) == 0x10);
 
         // Cast back to byte and store in A
         A = (byte)(result & 0xFF);

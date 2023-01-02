@@ -182,4 +182,10 @@ internal class MemoryBus
         r += Read(addr);
         return r;
     }
+
+    public void WriteWord(ushort addr, ushort val)
+    {
+        Write(addr,   Byte.lower(val));
+        Write(++addr, Byte.upper(val));
+    }
 }
