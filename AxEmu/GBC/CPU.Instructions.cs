@@ -33,6 +33,8 @@ internal partial class CPU
         // Specific bit targets, i.e. for SETing or RESing bits
         Bit0, Bit1, Bit2, Bit3,
         Bit4, Bit5, Bit6, Bit7,
+
+        SP_Plus_Imm, // Only used by instr 0xF8
     }
 
     internal enum Conditional
@@ -90,6 +92,7 @@ internal partial class CPU
             {
                 Data.Imm => 1,
                 Data.Ind_Imm => 1,
+                Data.SP_Plus_Imm => 1,
                 Data.Abs => 2,
                 Data.Ind_Abs => 2,
                 _ => 0,
@@ -296,6 +299,7 @@ internal partial class CPU
     [Instruction(OPCode = 0xF2, Cycles = 8,  Output = Data.A,       Input = Data.Ind_C)]
 
     [Instruction(OPCode = 0xF9, Cycles = 8,  Output = Data.SP,      Input = Data.HL)]
+    [Instruction(OPCode = 0xF8, Cycles = 16, Output = Data.HL,      Input = Data.SP_Plus_Imm)]
     public void LD() => Write();
 
     //
@@ -328,7 +332,10 @@ internal partial class CPU
     public void RST() => RstImpl();
 
     [Instruction(OPCode = 0xCD, Cycles = 20, Condition = Conditional.Always, Input = Data.Abs)]
+    [Instruction(OPCode = 0xCC, Cycles =  8, Condition = Conditional.Z,      Input = Data.Abs)]
+    [Instruction(OPCode = 0xDC, Cycles =  8, Condition = Conditional.C,      Input = Data.Abs)]
     [Instruction(OPCode = 0xC4, Cycles =  8, Condition = Conditional.NZ,     Input = Data.Abs)]
+    [Instruction(OPCode = 0xD4, Cycles =  8, Condition = Conditional.NC,     Input = Data.Abs)]
     public void CALL() => CallImpl();
 
     [Instruction(OPCode = 0xCA, Name = "JMP Z",  Cycles = 12, Condition = Conditional.Z,  Input = Data.Abs)]
@@ -373,6 +380,9 @@ internal partial class CPU
     [Instruction(OPCode = 0x29, Name = "Add", Cycles = 8, Output = Data.HL, Input = Data.HL)]
     [Instruction(OPCode = 0x39, Name = "Add", Cycles = 8, Output = Data.HL, Input = Data.SP)]
     public void ADD_16() => Add16Impl();
+
+    [Instruction(OPCode = 0xE8, Name = "Add", Cycles = 16, Output = Data.SP, Input = Data.Imm)]
+    public void ADD_SP_Imm() => AddSPImmImpl();
 
     [Instruction(OPCode = 0x80, Cycles = 4, Output = Data.A, Input = Data.B)]
     [Instruction(OPCode = 0x81, Cycles = 4, Output = Data.A, Input = Data.C)]

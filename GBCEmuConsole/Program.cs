@@ -7,11 +7,11 @@ Emulator gbc = new();
 //
 // TODO: Load from cmd line
 //gbc.LoadROM("D:\\Test\\GBC\\tetris.gb");
-//gbc.LoadROM(@"D:\Test\GBC\game-boy-test-roms-v5.1\blargg\cpu_instrs\individual\03-op sp,hl.gb");
-gbc.LoadROM(@"D:\Test\GBC\game-boy-test-roms-v5.1\blargg\cpu_instrs\individual\07-jr,jp,call,ret,rst.gb");
+gbc.LoadROM(@"D:\Test\GBC\game-boy-test-roms-v5.1\blargg\cpu_instrs\individual\03-op sp,hl.gb");
+//gbc.LoadROM(@"D:\Test\GBC\game-boy-test-roms-v5.1\blargg\cpu_instrs\individual\07-jr,jp,call,ret,rst.gb");
 
 var readKey = false;
-var printCpu = true;
+var printCpu = false;
 var gbDoctorLog = true;
 
 //

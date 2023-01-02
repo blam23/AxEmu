@@ -306,6 +306,8 @@ internal partial class CPU
             Data.AF  => AF,
             Data.SP  => SP,
 
+            Data.SP_Plus_Imm => GetSPWithImmOffsetAndSetFlags(),
+
             _ => throw new InvalidOperationException()
         };
     }
@@ -460,6 +462,29 @@ internal partial class CPU
         }
     }
 
+    private ushort GetSPWithImmOffsetAndSetFlags()
+    {
+        var operand = (sbyte)Imm();
+        var result = SP + operand;
+
+        flags.Z = false;
+        flags.C = (((SP & 0xFF) + (operand & 0xFF)) & 0x100) == 0x100;
+        //flags.C = result == 0x0100 || result == 0x8000 || result > 0xFFFF || result == 0x0000;
+        flags.N = false;
+        flags.H = (((SP & 0xF) + (operand & 0xF)) & 0x10) == 0x10;
+
+        return (ushort)(result & 0xFFFF);
+    }
+
+    // Easier to have this as a specific method as it has various quirks
+    private void AddSPImmImpl()
+    {
+        if (current.Output != Data.SP && current.Input != Data.Imm)
+            throw new InvalidOperationException();
+
+        SP = GetSPWithImmOffsetAndSetFlags();
+    }
+
     private void Add16Impl()
     {
         // Only HL is used as output for 16-bit addition
@@ -496,7 +521,7 @@ internal partial class CPU
         // Set flags
         flags.C = result > 0xFF;
         flags.N = false;
-        flags.H = ((((A & 0xF) + (operand & 0xF)) & 0x10) == 0x10);
+        flags.H = (((A & 0xF) + (operand & 0xF)) & 0x10) == 0x10;
 
         // Cast back to byte and store in A
         A = (byte)(result & 0xFF);
