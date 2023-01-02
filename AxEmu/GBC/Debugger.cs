@@ -49,6 +49,23 @@ public class Debugger
         return $"{PCStr()} | {FlagString()} | A:{cpu.A:X2} B:{cpu.B:X2} C:{cpu.C:X2} D:{cpu.D:X2} E:{cpu.E:X2} H:{cpu.H:X2} L:{cpu.L:X2} SP:{cpu.SP:X4} | {InstructionStr()}";    
     }
 
+    public void SetupGBDoctorMode()
+    {
+        system.ppu.dbgFixLY = true; 
+    }
+
+    public string CPUStatusGBDoctor()
+    {
+        var cpu = system.cpu;
+
+        var pcmem1 = system.bus.Read(system.cpu.PC);
+        var pcmem2 = system.bus.Read((ushort)(system.cpu.PC+1));
+        var pcmem3 = system.bus.Read((ushort)(system.cpu.PC+2));
+        var pcmem4 = system.bus.Read((ushort)(system.cpu.PC+3));
+
+        return $"A:{cpu.A:X2} F:{cpu.flags.AsByte:X2} B:{cpu.B:X2} C:{cpu.C:X2} D:{cpu.D:X2} E:{cpu.E:X2} H:{cpu.H:X2} L:{cpu.L:X2} SP:{cpu.SP:X4} PC:{cpu.PC:X4} PCMEM:{pcmem1:X2},{pcmem2:X2},{pcmem3:X2},{pcmem4:X2}";
+    }
+
     public string DumpMemory(int start, int end, int stride = 16, ushort highlight = ushort.MaxValue)
     {
         start = int.Clamp(start, 0, ushort.MaxValue-1);

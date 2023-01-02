@@ -2,14 +2,34 @@
 
 Emulator gbc = new();
 
-gbc.LoadROM("D:\\Test\\GBC\\tetris.gb");
+//
+// Setup - Modify these
+//
+// TODO: Load from cmd line
+//gbc.LoadROM("D:\\Test\\GBC\\tetris.gb");
+//gbc.LoadROM(@"D:\Test\GBC\game-boy-test-roms-v5.1\blargg\cpu_instrs\individual\03-op sp,hl.gb");
+gbc.LoadROM(@"D:\Test\GBC\game-boy-test-roms-v5.1\blargg\cpu_instrs\individual\07-jr,jp,call,ret,rst.gb");
 
-var readKey = true;
+var readKey = false;
 var printCpu = true;
+var gbDoctorLog = true;
+
+//
+// Code
+//
+StreamWriter? logWriter = null;
+if (gbDoctorLog)
+{
+    File.Delete("D:\\Test\\GBC\\log.txt");
+    logWriter = new(File.OpenWrite("D:\\Test\\GBC\\log.txt"));
+    gbc.debug.SetupGBDoctorMode();
+}
 
 ulong i = 0;
 while (true)
 {
+    logWriter?.Write(gbc.debug.CPUStatusGBDoctor() + "\n");
+
     if (printCpu)
         Console.WriteLine(gbc.debug.CPUStatus());
 
@@ -41,3 +61,5 @@ while (true)
 
     i++;
 }
+
+logWriter?.Dispose();

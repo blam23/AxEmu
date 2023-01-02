@@ -99,11 +99,14 @@ internal class FIFO
 
         if (lineX > (ppu.SCX % 8))
         {
-            var comb = pushedX + (ppu.LY * PPU.RenderWidth);
+            if (ppu.LY != 0x90)
+            {
+                var comb = pushedX + (ppu.LY * PPU.RenderWidth);
 
-            ppu.Bgr24Bitmap[comb * 3 + 0] = p.B;
-            ppu.Bgr24Bitmap[comb * 3 + 1] = p.G;
-            ppu.Bgr24Bitmap[comb * 3 + 2] = p.R;
+                ppu.Bgr24Bitmap[comb * 3 + 0] = p.B;
+                ppu.Bgr24Bitmap[comb * 3 + 1] = p.G;
+                ppu.Bgr24Bitmap[comb * 3 + 2] = p.R;
+            }
 
             pushedX++;
 
@@ -312,6 +315,7 @@ internal class PPU
     // Debug
     internal bool dbgSlowMode = false;
     internal byte dbgCurrentTile => fifo.currentTile;
+    internal bool dbgFixLY = false;
 
     // Events
     public delegate void PPUFrameEvent(byte[] bitmap);
@@ -423,6 +427,9 @@ internal class PPU
         lineDot++;
         dot++;
 
+        if (dbgFixLY)
+            LY = 0x90;
+
         switch (mode)
         {
             case Mode.HorizontalBlank:
@@ -440,6 +447,9 @@ internal class PPU
             default:
                 throw new InvalidOperationException();
         }
+
+        if (dbgFixLY)
+            LY = 0x90;
     }
 
     private static readonly Color[] blackAndWhite = new[]
@@ -462,10 +472,10 @@ internal class PPU
     {
         return c switch
         {
-            0 => highContrastGreen[0],
-            1 => highContrastGreen[1],
-            2 => highContrastGreen[2],
-            3 => highContrastGreen[3],
+            0 => blackAndWhite[0],
+            1 => blackAndWhite[1],
+            2 => blackAndWhite[2],
+            3 => blackAndWhite[3],
 
             _ => Color.DodgerBlue,
         };

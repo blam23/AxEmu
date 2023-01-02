@@ -165,9 +165,10 @@ internal partial class CPU
     public void NOP() { }
 
     [Instruction(OPCode = 0x76, Cycles = 4)]
-    public void HALT() 
-    { 
-        // TODO: HALT
+    public void HALT()
+    {
+        if (IME)
+            halted = true;
     }
 
     [Instruction(OPCode = 0xF3, Cycles = 4)]
@@ -175,9 +176,6 @@ internal partial class CPU
 
     [Instruction(OPCode = 0xFB, Cycles = 4)]
     public void EI() => IME = true;
-
-    [Instruction(OPCode = 0xCB, Cycles = 4)]
-    public void PREFIX() => usePrefixInstruction = true;
 
     //
     // Load
@@ -296,6 +294,8 @@ internal partial class CPU
 
     [Instruction(OPCode = 0xE2, Cycles = 8,  Output = Data.Ind_C,   Input = Data.A)]
     [Instruction(OPCode = 0xF2, Cycles = 8,  Output = Data.A,       Input = Data.Ind_C)]
+
+    [Instruction(OPCode = 0xF9, Cycles = 8,  Output = Data.SP,      Input = Data.HL)]
     public void LD() => Write();
 
     //
@@ -393,6 +393,7 @@ internal partial class CPU
     [Instruction(OPCode = 0x8D, Cycles = 4, Output = Data.A, Input = Data.L)]
     [Instruction(OPCode = 0x8E, Cycles = 8, Output = Data.A, Input = Data.Ind_HL)]
     [Instruction(OPCode = 0x8F, Cycles = 4, Output = Data.A, Input = Data.A)]
+    [Instruction(OPCode = 0xCE, Cycles = 8, Output = Data.A, Input = Data.Imm)]
     public void ADC() => AddImpl(true);
 
     [Instruction(OPCode = 0x90, Cycles = 4, Output = Data.A, Input = Data.B)]
@@ -403,6 +404,7 @@ internal partial class CPU
     [Instruction(OPCode = 0x95, Cycles = 4, Output = Data.A, Input = Data.L)]
     [Instruction(OPCode = 0x96, Cycles = 8, Output = Data.A, Input = Data.Ind_HL)]
     [Instruction(OPCode = 0x97, Cycles = 4, Output = Data.A, Input = Data.A)]
+    [Instruction(OPCode = 0xD6, Cycles = 8, Output = Data.A, Input = Data.Imm)]
     public void SUB() => SubImpl(false);
 
     [Instruction(OPCode = 0x98, Cycles = 4, Output = Data.A, Input = Data.B)]
@@ -495,8 +497,8 @@ internal partial class CPU
     [Instruction(Prefix = true, OPCode = 0x0D, Cycles = 4, Input = Data.L, Output = Data.L)]
     [Instruction(Prefix = true, OPCode = 0x0E, Cycles = 12, Input = Data.Ind_HL, Output = Data.Ind_HL)]
     [Instruction(Prefix = true, OPCode = 0x0F, Cycles = 4, Input = Data.A, Output = Data.A)]
-    [Instruction(OPCode = 0x0F, Cycles = 4, Output = Data.A)]
-    public void RRC() => RrImpl(true);
+    [Instruction(OPCode = 0x0F, Cycles = 4, Input = Data.A, Output = Data.A)]
+    public void RRC() => RrImpl(false, false);
 
     [Instruction(Prefix = true, OPCode = 0x18, Cycles = 4, Input = Data.B, Output = Data.B)]
     [Instruction(Prefix = true, OPCode = 0x19, Cycles = 4, Input = Data.C, Output = Data.C)]
@@ -506,8 +508,8 @@ internal partial class CPU
     [Instruction(Prefix = true, OPCode = 0x1D, Cycles = 4, Input = Data.L, Output = Data.L)]
     [Instruction(Prefix = true, OPCode = 0x1E, Cycles = 12, Input = Data.Ind_HL, Output = Data.Ind_HL)]
     [Instruction(Prefix = true, OPCode = 0x1F, Cycles = 4, Input = Data.A, Output = Data.A)]
-    [Instruction(OPCode = 0x1F, Cycles = 4, Output = Data.A)]
-    public void RR() => RrImpl(false);
+    [Instruction(OPCode = 0x1F, Cycles = 4, Input = Data.A, Output = Data.A)]
+    public void RR() => RrImpl(true, false);
 
     [Instruction(Prefix = true, OPCode = 0x00, Cycles = 4, Input = Data.B, Output = Data.B)]
     [Instruction(Prefix = true, OPCode = 0x01, Cycles = 4, Input = Data.C, Output = Data.C)]
@@ -518,7 +520,7 @@ internal partial class CPU
     [Instruction(Prefix = true, OPCode = 0x06, Cycles = 12, Input = Data.Ind_HL, Output = Data.Ind_HL)]
     [Instruction(Prefix = true, OPCode = 0x07, Cycles = 4, Input = Data.A, Output = Data.A)]
     [Instruction(OPCode = 0x07, Cycles = 4, Input = Data.A, Output = Data.A)]
-    public void RLC() => RlImpl(true);
+    public void RLC() => RlImpl(false);
 
     [Instruction(Prefix = true, OPCode = 0x10, Cycles = 4, Input = Data.B, Output = Data.B)]
     [Instruction(Prefix = true, OPCode = 0x11, Cycles = 4, Input = Data.C, Output = Data.C)]
@@ -529,7 +531,7 @@ internal partial class CPU
     [Instruction(Prefix = true, OPCode = 0x16, Cycles = 12, Input = Data.Ind_HL, Output = Data.Ind_HL)]
     [Instruction(Prefix = true, OPCode = 0x17, Cycles = 4, Input = Data.A, Output = Data.A)]
     [Instruction(OPCode = 0x17, Cycles = 4, Input = Data.A, Output = Data.A)]
-    public void RL() => RlImpl(false);
+    public void RL() => RlImpl(true);
 
     [Instruction(Prefix = true, OPCode = 0x20, Cycles = 8, Input = Data.B, Output = Data.B)]
     [Instruction(Prefix = true, OPCode = 0x21, Cycles = 8, Input = Data.C, Output = Data.C)]
@@ -550,6 +552,16 @@ internal partial class CPU
     [Instruction(Prefix = true, OPCode = 0x2E, Cycles = 16, Input = Data.Ind_HL, Output = Data.Ind_HL)]
     [Instruction(Prefix = true, OPCode = 0x2F, Cycles = 8, Input = Data.A, Output = Data.A)]
     public void SRA() => SraImpl();
+
+    [Instruction(Prefix = true, OPCode = 0x38, Cycles = 8, Input = Data.B, Output = Data.B)]
+    [Instruction(Prefix = true, OPCode = 0x39, Cycles = 8, Input = Data.C, Output = Data.C)]
+    [Instruction(Prefix = true, OPCode = 0x3A, Cycles = 8, Input = Data.D, Output = Data.D)]
+    [Instruction(Prefix = true, OPCode = 0x3B, Cycles = 8, Input = Data.E, Output = Data.E)]
+    [Instruction(Prefix = true, OPCode = 0x3C, Cycles = 8, Input = Data.H, Output = Data.H)]
+    [Instruction(Prefix = true, OPCode = 0x3D, Cycles = 8, Input = Data.L, Output = Data.L)]
+    [Instruction(Prefix = true, OPCode = 0x3E, Cycles = 16, Input = Data.Ind_HL, Output = Data.Ind_HL)]
+    [Instruction(Prefix = true, OPCode = 0x3F, Cycles = 8, Input = Data.A, Output = Data.A)]
+    public void SRL() => SrlImpl();
 
     [Instruction(Prefix = true, OPCode = 0x30, Cycles = 4, Input = Data.B, Output = Data.B)]
     [Instruction(Prefix = true, OPCode = 0x31, Cycles = 4, Input = Data.C, Output = Data.C)]

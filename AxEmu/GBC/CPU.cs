@@ -41,10 +41,10 @@ internal partial class CPU
 
         public void Set(byte value)
         {
-            Z = Byte.bit(value, 0x40);
-            N = Byte.bit(value, 0x20);
-            H = Byte.bit(value, 0x10);
-            C = Byte.bit(value, 0x08);
+            Z = Byte.bit(value, 0x80);
+            N = Byte.bit(value, 0x40);
+            H = Byte.bit(value, 0x20);
+            C = Byte.bit(value, 0x10);
         }
     }
 
@@ -82,7 +82,8 @@ internal partial class CPU
         set { H = Byte.upper(value); L = Byte.lower(value); }
     }
 
-    bool IME = false;
+    bool IME    = false;
+    bool halted = false;
 
     //
     // Interrupts
@@ -118,6 +119,7 @@ internal partial class CPU
     private void ServiceInterrupt()
     {
         IME = false;
+        halted = false;
         CyclesLastClock += 5;
 
         PushWord(PC);
@@ -159,7 +161,6 @@ internal partial class CPU
     //
     // Current State
     //
-    bool usePrefixInstruction = false;
     Instruction current;
     bool jumped;
 
@@ -175,30 +176,37 @@ internal partial class CPU
             ServiceInterrupt();
         }
 
-        // Get instruction
-        var op = bus.Read(PC);
-        bool prefixed = usePrefixInstruction;
-        var instr = usePrefixInstruction ? prefixInstructions[op] : instructions[op];
-
-        // Reset prefix state now we have used it
-        if (usePrefixInstruction)
-            usePrefixInstruction = false;
-
-        // Carry out instruction
-        if (instr != null)
+        if (!halted)
         {
-            current = instr;
-            instr.action();
+            // Get instruction
+            var op = bus.Read(PC);
+
+            var prefixed = false;
+            if (op == 0xCB)
+            {
+                op = bus.Read(++PC);
+                prefixed = true;
+            }
+
+            var instr = prefixed ? prefixInstructions[op] : instructions[op];
+
+            // Carry out instruction
+            if (instr != null)
+            {
+                current = instr;
+                PC += current.Size;
+                instr.action();
+            }
+            else
+                throw new NotImplementedException($"Unknown opcode: {op:X2}, prefixed? {(prefixed ? 'Y' : 'N')}");
+
+            // Store how many cycles the instruction took
+            CyclesLastClock = (uint)(instr.Cycles + (jumped ? 4 : 0));
         }
         else
-            throw new NotImplementedException($"Unknown opcode: {op:X2}, prefixed? {(prefixed ? 'Y' : 'N')}");
-
-        // Store how many cycles the instruction took
-        CyclesLastClock = (uint)(instr.Cycles + (jumped ? 4 : 0));
-
-        // Move to next instruction
-        if (!jumped)
-            PC += instr.Size;
+        {
+            CyclesLastClock = 4;
+        }
     }
 
     public void Reset()
@@ -212,6 +220,11 @@ internal partial class CPU
         E = 0xD8;
         H = 0x01;
         L = 0x4D;
+
+        flags.C = true;
+        flags.H = true;
+        flags.N = false;
+        flags.Z = true;
 
         SP = 0xFFFE;
         PC = 0x0100;
@@ -241,8 +254,8 @@ internal partial class CPU
         return Byte.combineR(PopByte(), PopByte());
     }
 
-    private byte Imm() => bus.Read((ushort)(PC + 1));
-    private ushort Abs() => bus.ReadWord((ushort)(PC + 1));
+    private byte Imm() => bus.Read((ushort)(PC - 1));
+    private ushort Abs() => bus.ReadWord((ushort)(PC - 2));
 
     private byte DataAsByte(Data d)
     {
@@ -428,7 +441,7 @@ internal partial class CPU
 
         // Jump with offset
         if (current.Input == Data.Imm)
-            PC = (ushort)(PC + (sbyte)InByte() + 2);
+            PC = (ushort)(PC + (sbyte)InByte());
         else // Jump using 16 bit data (such as an absolute value or combined register)
             PC = InWord();
     }
@@ -441,7 +454,7 @@ internal partial class CPU
         {
             jumped = true;
 
-            PC = (ushort)(PopWord() + 3);
+            PC = PopWord();
         }
     }
 
@@ -457,13 +470,13 @@ internal partial class CPU
         // Add operand to HL and store in int so we can check if we need to carry
         var result = HL + operand;
 
-        // Cast back to ushort and store in HL
-        HL = (ushort)(result & 0xFFFF);
-
         // Set flags
         flags.C = result > 0xFFFF;
-        flags.H = result > 0x07FF;
         flags.N = false;
+        flags.H = ((HL & 0x0FFF) + (operand & 0x0FFF)) > 0x0FFF;
+
+        // Cast back to ushort and store in HL
+        HL = (ushort)(result & 0xFFFF);
     }
 
     private void AddImpl(bool carry = false)
@@ -478,13 +491,13 @@ internal partial class CPU
         // Add operand to A and store in int so we can check if we need to carry
         var result = A + operand;
 
-        // Cast back to byte and store in A
-        A = (byte)(result & 0xFF);
-
         // Set flags
         flags.C = result > 0xFF;
-        flags.H = result > 0x0F;
         flags.N = false;
+        flags.H = flags.C || ((((A & 0xF) + (operand & 0xF)) & 0x10) == 0x10);
+
+        // Cast back to byte and store in A
+        A = (byte)(result & 0xFF);
         flags.Z = A == 0;
     }
 
@@ -500,13 +513,13 @@ internal partial class CPU
         // Sub operand from A and store in int so we went negative
         var result = A - operand;
 
-        // Cast back to byte and store in A
-        A = (byte)(result & 0xFF);
-
         // Set flags
         flags.C = result < 0x00;
-        flags.H = result < 0x0F;
         flags.N = true;
+        flags.H = ((((A & 0xF) - (operand & 0xF)) & 0x10) == 0x10);
+
+        // Cast back to byte and store in A
+        A = (byte)(result & 0xFF);
         flags.Z = A == 0;
     }
 
@@ -524,9 +537,9 @@ internal partial class CPU
 
         // Set flags
         flags.C = result < 0x00;
-        flags.H = result < 0x0F;
+        flags.H = (((A & 0xF) - (operand & 0xF)) & 0x10) == 0x10;
         flags.N = true;
-        flags.Z = A == 0;
+        flags.Z = result == 0;
     }
 
     private void DaaImpl()
@@ -664,8 +677,8 @@ internal partial class CPU
 
         // Set flags
         flags.Z = A == 0;
-        flags.N = true;
-        flags.H = false;
+        flags.N = false;
+        flags.H = true;
         flags.C = false;
     }
 
@@ -707,7 +720,8 @@ internal partial class CPU
 
         flags.Z = result == 0;
         flags.N = true;
-        flags.H = result < 0x0F;
+
+        flags.H = ((((result+1) & 0xF) - 1) & 0x10) == 0x10;
     }
 
     private void IncImpl()
@@ -737,6 +751,8 @@ internal partial class CPU
             _ => throw new InvalidOperationException(),
         };
 
+
+
         bool u16 = current.Input == Data.BC
             || current.Input == Data.DE
             || current.Input == Data.HL
@@ -747,14 +763,16 @@ internal partial class CPU
             return;
 
         flags.Z = result == 0;
-        flags.N = true;
-        flags.H = result > 0x0F;
+        flags.N = false;
+
+        flags.H = ((((result - 1) & 0xF) + 1) & 0x10) == 0x10;
+        //flags.H = (((result-1) & 0xF) + (1 & 0xF)) > 0xF;
     }
 
-    private void RrImpl(bool carry)
+    private void RrImpl(bool carry, bool arth)
     {
         var val = InByte();
-        (val, flags.C) = Byte.ror(val, carry && flags.C);
+        (val, flags.C) = Byte.ror(val, (carry && flags.C) || (arth && (val & 0x80) == 0x80));
         WriteByte(val);
 
         flags.Z = current.Prefix && val == 0;
@@ -783,7 +801,19 @@ internal partial class CPU
         flags.H = false;
         flags.N = false;
     }
+
     private void SraImpl()
+    {
+        var val = InByte();
+        (val, flags.C) = Byte.ror(val, (val & 0x80) == 0x80);
+        WriteByte(val);
+
+        flags.Z = current.Prefix && val == 0;
+        flags.H = false;
+        flags.N = false;
+    }
+
+    private void SrlImpl()
     {
         var val = InByte();
         (val, flags.C) = Byte.ror(val, false);
