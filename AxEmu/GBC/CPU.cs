@@ -11,7 +11,6 @@ internal partial class CPU
     //
     readonly MemoryBus bus;
 
-
     //
     // Initialisation
     //
@@ -83,17 +82,15 @@ internal partial class CPU
     }
 
     bool IME    = false;
-    bool halted = false;
+    internal bool halted = false;
 
     //
     // Interrupts
     //
 
-    [IO(Address = 0xFFFF)]
-    public byte IE { get; set; } = 0;
+    [IO(Address = 0xFFFF)] public byte IE { get; set; } = 0;
 
-    [IO(Address = 0xFF0F)]
-    public byte IF { get; set; } = 0;
+    [IO(Address = 0xFF0F)] public byte IF { get; set; } = 0;
 
     internal enum Interrupt
     {
@@ -106,6 +103,9 @@ internal partial class CPU
 
     public void RequestInterrupt(Interrupt type)
     {
+        if (stopped && type == Interrupt.Joypad)
+            stopped = false;
+
         switch(type)
         {
             case Interrupt.VBlank:  IF |= 0x01; break;
@@ -125,7 +125,7 @@ internal partial class CPU
         PushWord(PC);
 
         // Only service the first enabled interrupt
-        var eif = IF | IE;
+        var eif = IF & IE;
 
         if (eif == 0)
             throw new InvalidOperationException();
@@ -163,6 +163,7 @@ internal partial class CPU
     //
     Instruction current;
     bool jumped;
+    internal bool stopped = false;
 
     public uint CyclesLastClock { get; private set; }
 
@@ -171,12 +172,12 @@ internal partial class CPU
         // Reset state
         jumped = false;
 
-        if(IME && (IF | IE) > 0)
+        if(IME && (IF & IE) > 0)
         {
             ServiceInterrupt();
         }
 
-        if (!halted)
+        if (!halted && !stopped)
         {
             // Get instruction
             var op = bus.Read(PC);
@@ -506,48 +507,48 @@ internal partial class CPU
         HL = (ushort)(result & 0xFFFF);
     }
 
-    private void AddImpl(bool carry = false)
+    private void AddImpl(bool useCarry = false)
     {
         // Only A is used as output for addition
         if (current.Output != Data.A)
             throw new InvalidOperationException();
 
+        var carry = (byte)((useCarry && flags.C) ? 1 : 0);
+        var a = A;
+
         // Get our operand
-        var operand = InByte() + ((carry && flags.C) ? 1 : 0);
+        var operand = InByte();
 
         // Add operand to A and store in int so we can check if we need to carry
-        var result = A + operand;
+        A = (byte)((a + operand + carry) & 0xFF);
 
         // Set flags
-        flags.C = result > 0xFF;
-        flags.N = false;
-        flags.H = (((A & 0xF) + (operand & 0xF)) & 0x10) == 0x10;
-
-        // Cast back to byte and store in A
-        A = (byte)(result & 0xFF);
         flags.Z = A == 0;
+        flags.C = (a + operand + carry) > 0xFF;
+        flags.N = false;
+        flags.H = ((a & 0xF) + (operand & 0xF) + carry) > 0x0F;
     }
 
-    private void SubImpl(bool carry = false)
+    private void SubImpl(bool useCarry = false)
     {
         // Only A is used as output for subtraction
         if (current.Output != Data.A)
             throw new InvalidOperationException();
 
-        // Get our operand
-        var operand = InByte() + ((carry && flags.C) ? 1 : 0);
+        var carry = (byte)((useCarry && flags.C) ? 1 : 0);
+        var a = A;
 
-        // Sub operand from A and store in int so we went negative
-        var result = A - operand;
+        // Get our operand
+        var operand = InByte();
+
+        // Add operand to A and store in int so we can check if we need to carry
+        A = (byte)((a - operand - carry) & 0xFF);
 
         // Set flags
-        flags.C = result < 0x00;
-        flags.N = true;
-        flags.H = ((((A & 0xF) - (operand & 0xF)) & 0x10) == 0x10);
-
-        // Cast back to byte and store in A
-        A = (byte)(result & 0xFF);
         flags.Z = A == 0;
+        flags.C = (a - operand - carry) < 0x00;
+        flags.N = true;
+        flags.H = ((a & 0xF) - (operand & 0xF) - carry) < 0x00;
     }
 
     private void CpImpl()
@@ -557,7 +558,7 @@ internal partial class CPU
             throw new InvalidOperationException();
 
         // Get our operand
-        var operand = InByte() + (flags.C ? 1 : 0);
+        var operand = InByte();
 
         // Sub operand from A and store in int so we went negative
         var result = A - operand;
@@ -573,7 +574,7 @@ internal partial class CPU
     {
         if (flags.N) // After Subtraction
         {
-            if (flags.H)
+            if (flags.C)
                 A -= 0x60;
 
             if (flags.H)
@@ -796,10 +797,10 @@ internal partial class CPU
         //flags.H = (((result-1) & 0xF) + (1 & 0xF)) > 0xF;
     }
 
-    private void RrImpl(bool carry, bool arth)
+    private void RrImpl(bool carry, bool keepHighBitHigh, bool moveHighToLow)
     {
         var val = InByte();
-        (val, flags.C) = Byte.ror(val, (carry && flags.C) || (arth && (val & 0x80) == 0x80));
+        (val, flags.C) = Byte.ror(val, (carry && flags.C) || (keepHighBitHigh && (val & 0x80) == 0x80) || (moveHighToLow && (val & 0x01) == 0x01));
         WriteByte(val);
 
         flags.Z = current.Prefix && val == 0;
@@ -807,10 +808,10 @@ internal partial class CPU
         flags.N = false;
     }
 
-    private void RlImpl(bool carry)
+    private void RlImpl(bool carry, bool arth = false)
     {
         var val = InByte();
-        (val, flags.C) = Byte.rol(val, carry && flags.C);
+        (val, flags.C) = Byte.rol(val, (carry && flags.C) || (arth && (val & 0x80) == 0x80));
         WriteByte(val);
 
         flags.Z = current.Prefix && val == 0;

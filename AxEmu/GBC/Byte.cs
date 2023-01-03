@@ -16,7 +16,7 @@ public static class Byte
     public static ushort combine(byte msb, byte lsb) => (ushort)(msb << 8 | lsb);
     public static ushort combineR(byte lsb, byte msb) => (ushort)(msb << 8 | lsb);
 
-    public static byte swap(byte a) => (byte)((a >> 8) | (a << 8));
+    public static byte swap(byte a) => (byte)(((a >> 4) & 0x0F) | (a << 4));
 
     public static byte or(params byte[] bytes)
     {

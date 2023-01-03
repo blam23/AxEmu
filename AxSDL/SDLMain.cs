@@ -246,7 +246,7 @@ internal unsafe class SDLMain
             emulator.Controller1.PressStart();
 
         if (button.Button == JBUTTON_SEL)
-            emulator.Controller1.PressStart();
+            emulator.Controller1.PressSelect();
     }
     private void JoyUp(JoyButtonEvent button)
     {
@@ -260,14 +260,12 @@ internal unsafe class SDLMain
             emulator.Controller1.ReleaseStart();
 
         if (button.Button == JBUTTON_SEL)
-            emulator.Controller1.ReleaseStart();
+            emulator.Controller1.ReleaseSelect();
     }
 
     private void KeyDown(KeyboardEvent kbe)
     {
         var scancode = kbe.Keysym.Scancode;
-
-        Console.WriteLine(scancode);
 
         if (scancode == Scancode.ScancodeEscape)
             running = false;

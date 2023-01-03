@@ -3,25 +3,33 @@ using static AxEmu.GBC.CPU;
 
 namespace AxEmu.GBC;
 
-internal struct Pixel
-{
-    private byte colour;
-    private byte palette;
-    //private ushort spritePriority; // CGB only
-    private bool bgAndWndPriority; // False == No, True == BG & Wnd colours 1-3 over obj
-}
-
 internal struct OAMEntry
 {
-    byte x;
-    byte y;
-    byte tile;
+    public byte x;
+    public byte y;
+    public byte tile;
 
-    byte palette;
-    bool vramBank;
-    bool flipX;
-    bool flipY;
-    bool behindBG;
+    public byte palette;
+    public bool dmaP;
+    public bool vramBank;
+    public bool flipX;
+    public bool flipY;
+    public bool bgPrio;
+
+    public OAMEntry(Span<byte> data)
+    {
+        y = data[0];
+        x = data[1];
+        tile = data[2];
+
+        var flags = data[3];
+        palette   = (byte)(flags & 0x7);
+        vramBank  = Byte.get(flags, 3);
+        dmaP      = Byte.get(flags, 4);
+        flipX     = Byte.get(flags, 5);
+        flipY     = Byte.get(flags, 6);
+        bgPrio    = Byte.get(flags, 7);
+    }
 }
 
 internal class FIFO
@@ -60,6 +68,9 @@ internal class FIFO
 
     private byte[] fetchData = new byte[3];
 
+    private List<OAMEntry> sprites = new();
+    private List<byte> spriteData = new();
+
     Random rng = new Random();
 
     private void getTile()
@@ -73,6 +84,62 @@ internal class FIFO
         if (!Byte.get(ppu.LCDC, 4))
             currentTile += 128;
     }
+
+    private void getWindow()
+    {
+        var wy = ppu.WY;
+        var wx = ppu.WX;
+
+        if (fetchX + 7 >= wx && fetchX+7 < wx + PPU.RenderHeight + 14
+            && ppu.LY >= wy && ppu.LY < wy + PPU.RenderWidth)
+        {
+            var ty = ppu.windowLine / 8;
+
+            var winMap = Byte.get(ppu.LCDC, 6) ? 0x9C00 : 0x9800;
+            ushort addr = (ushort)((winMap + (fetchX + 7 - wx) / 8) + ty * 32);
+            currentTile = ppu.bus.Read(addr);
+
+            if (!Byte.get(ppu.LCDC, 4))
+                currentTile += 128;
+        }
+    }
+
+    private void getSprites()
+    {
+        foreach(var sprite in ppu.spritesOnLine)
+        {
+            var sx = (sprite.x - 8) + (ppu.SCX % 8);
+
+            if ((sx >= fetchX && sx < fetchX + 8)
+                || ((sx + 8) >= fetchX && (sx + 8) < fetchX + 8))
+            {
+                sprites.Add(sprite);
+            }
+        }
+    }
+
+    private void getSpriteData()
+    {
+        var cy = ppu.LY;
+        byte height = (byte)(Byte.get(ppu.LCDC, 2) ? 16 : 8);
+
+        foreach (OAMEntry sprite in sprites)
+        {
+            var ty = (cy + 16 - sprite.y) * 2;
+
+            if (sprite.flipY)
+                ty = (height * 2) - 2 - ty;
+
+            var tile = sprite.tile;
+            if (height == 16)
+                tile &= 0xFE; // remove last bit
+
+            var addr = (ushort)(0x8000 + (tile * 16) + ty);
+            spriteData.Add(ppu.bus.Read(addr));
+            spriteData.Add(ppu.bus.Read(++addr));
+        }
+    }
+
 
     private void getTileLow()
     {
@@ -114,7 +181,7 @@ internal class FIFO
             {
                 ppu.OnFrameCompleted();
 
-                Thread.Sleep(1);
+                //Thread.Sleep(1);
             }
 
         }
@@ -133,10 +200,22 @@ internal class FIFO
         for (var i = 0; i < 8; i++)
         {
             var bit = 7 - i;
-            byte hi = (byte)((tileHi & (1 << bit)) >> bit);
-            byte lo = (byte)((tileLo & (1 << bit)) >> bit);
-            var pixelColour = ppu.lookupBGPalette(ppu.dmgPalette[hi << 1 | lo]);
+            
+            byte hi = (byte)(Byte.get(tileHi, bit) ? 1 : 0);
+            byte lo = (byte)(Byte.get(tileLo, bit) ? 1 : 0);
+            var colour = ppu.dmgPalette[hi << 1 | lo];
 
+            if (!Byte.get(ppu.LCDC, 0))
+                colour = 0;
+
+            if (Byte.get(ppu.LCDC, 1))
+            {
+                var (spriteSet, spriteC) = fetchSpritePixel(bit, colour);
+                if (spriteSet)
+                    colour = spriteC;
+            }
+
+            var pixelColour = ppu.rgbLookup(colour);
             if (x >= 0)
             {
                 fifo.Enqueue(pixelColour);
@@ -147,6 +226,40 @@ internal class FIFO
         return true;
     }
 
+    private (bool, byte) fetchSpritePixel(int bit, byte bgColour)
+    {
+        for (int i = 0; i < sprites.Count; i++)
+        {
+            OAMEntry sprite = sprites[i];
+            var x = sprite.x - 8 + (ppu.SCX % 8);
+
+            if (x + 8 < fifoX)
+                continue;
+
+            var offset = fifoX - x;
+
+            if (offset < 0 || offset > 7)
+                continue;
+
+            var sbit = sprite.flipX ? offset : (7 - offset);
+
+            byte hi = (byte)(Byte.get(spriteData[i * 2], sbit)       ? 1 : 0);//(byte)((spriteData[i * 2] & (1 << bit)) >> bit);
+            byte lo = (byte)(Byte.get(spriteData[(i * 2) + 1], sbit) ? 1 : 0);//(byte)((spriteData[(i * 2) + 1] & (1 << bit)) >> bit);
+            var idx = hi << 1 | lo;
+
+            // transparent
+            if (hi == 0 && lo == 0)
+                continue;
+
+            if (!sprite.bgPrio || bgColour == 0)
+            {
+                return (true, (byte)idx);// sprite.dmaP ? ppu.sp1Palette[idx] : ppu.sp2Palette[idx]);
+            }
+        }
+
+        return (false, 0);
+    }
+
     // 3 clocks to fetch 8 pixels
     // pauses in 4th clock unless space in data
     private void fetch()
@@ -155,8 +268,17 @@ internal class FIFO
         {
             case Mode.Tile:
 
+                sprites.Clear();
+                spriteData.Clear();
+
                 if (Byte.get(ppu.LCDC, 0))
                     getTile();
+
+                if (Byte.get(ppu.LCDC, 1) && ppu.spritesOnLine.Count > 0)
+                    getSprites();
+
+                if (ppu.showWindow)
+                    getWindow();
 
                 mode = Mode.DataLow;
                 fetchX += 8;
@@ -164,6 +286,7 @@ internal class FIFO
 
             case Mode.DataLow:
                 getTileLow();
+                getSpriteData(); // should just get low sprite data, YOLO
                 mode = Mode.DataHigh;
                 break;
 
@@ -284,12 +407,32 @@ internal class PPU
 
     
     internal byte[] dmgPalette = new byte[] { 0, 1, 2, 3 };
-    private void setPalette(byte value)
+    internal byte[] sp1Palette = new byte[] { 0, 1, 2, 3 };
+    internal byte[] sp2Palette = new byte[] { 0, 1, 2, 3 };
+    private void setBGPalette(byte value)
     {
         dmgPalette[3] = (byte)((value & 0xC0) >> 6);
         dmgPalette[2] = (byte)((value & 0x30) >> 4);
         dmgPalette[1] = (byte)((value & 0x0C) >> 2);
         dmgPalette[0] = (byte)(value & 0x03);
+    }
+
+    private void setOAMPalette(int palette, byte value)
+    {
+        if (palette == 1)
+        {
+            sp1Palette[3] = (byte)((value & 0xC0) >> 6);
+            sp1Palette[2] = (byte)((value & 0x30) >> 4);
+            sp1Palette[1] = (byte)((value & 0x0C) >> 2);
+            sp1Palette[0] = 0;
+        }
+        else
+        {
+            sp2Palette[3] = (byte)((value & 0xC0) >> 6);
+            sp2Palette[2] = (byte)((value & 0x30) >> 4);
+            sp2Palette[1] = (byte)((value & 0x0C) >> 2);
+            sp2Palette[0] = 0;
+        }
     }
 
     [IO(Address = 0xFF41, Type=IOType.Read)]
@@ -299,7 +442,13 @@ internal class PPU
     public static void SetLCDStatus(Emulator system, byte value) => system.ppu.setLCDStatus(value);
 
     [IO(Address = 0xFF47, Type = IOType.Write)]
-    public static void SetPalette(Emulator system, byte value) => system.ppu.setPalette(value);
+    public static void SetBGPalette(Emulator system, byte value) => system.ppu.setBGPalette(value);
+
+    [IO(Address = 0xFF48, Type = IOType.Write)]
+    public static void SetOAMPalette1(Emulator system, byte value) => system.ppu.setOAMPalette(1, value);
+
+    [IO(Address = 0xFF49, Type = IOType.Write)]
+    public static void SetOAMPalette2(Emulator system, byte value) => system.ppu.setOAMPalette(2, value);
 
     #endregion
 
@@ -316,6 +465,7 @@ internal class PPU
     internal bool dbgSlowMode = false;
     internal byte dbgCurrentTile => fifo.currentTile;
     internal bool dbgFixLY = false;
+    internal byte[] DbgSpriteBmp = new byte[RenderWidth * RenderHeight * 3];
 
     // Events
     public delegate void PPUFrameEvent(byte[] bitmap);
@@ -328,6 +478,10 @@ internal class PPU
     internal int dot = 0;
     internal int lineDot = 0;
     internal int scanline = 0;
+
+    internal bool showWindow => Byte.get(LCDC, 5) && WX >= 0 && WX <= RenderHeight && WY >= 0 && WY <= RenderWidth;
+    internal int windowLine = 0;
+
     internal int x = 0;
     internal Mode mode = Mode.OAMScan;
     internal bool vramBlocked = false;
@@ -348,13 +502,20 @@ internal class PPU
     {
         this.mode = mode;
 
+        // VBlank interrupt
+        if (mode == Mode.VerticalBlank) { system.cpu.RequestInterrupt(Interrupt.VBlank); }
+
+        // STAT interrupts
         if (mode == Mode.OAMScan         && OAMInterrupt)    { system.cpu.RequestInterrupt(Interrupt.Stat); }
-        if (mode == Mode.VerticalBlank   && VBlankInterrupt) { system.cpu.RequestInterrupt(Interrupt.VBlank); }
+        if (mode == Mode.VerticalBlank   && VBlankInterrupt) { system.cpu.RequestInterrupt(Interrupt.Stat); }
         if (mode == Mode.HorizontalBlank && HBlankInterrupt) { system.cpu.RequestInterrupt(Interrupt.Stat); }
     }
 
     private void NextLine()
     {
+        if (showWindow && LY >= WY && LY < WY + RenderHeight)
+            windowLine++;
+
         LY++;
 
         if (LY == LYC && LYCompareInterrupt)
@@ -397,18 +558,52 @@ internal class PPU
                 LY = 0;
                 dot = 0;
                 lineDot = 0;
+                windowLine = 0;
                 fifo.Reset();
             }
         }
     }
 
+
+    internal List<OAMEntry> spritesOnLine = new();
     private void OAMScanClock()
     {
+        if (lineDot == 1)
+        {
+            spritesOnLine.Clear();
+            getSprites();
+        }
+
         if (lineDot >= 80)
         {
             ChangeMode(Mode.Drawing);
             fifo.Reset();
         }
+    }
+
+    private void getSprites()
+    {
+        var y = LY;
+        byte height = (byte)(Byte.get(LCDC, 2) ? 16 : 8);
+        var OAM = system.bus.OAM;
+
+        for (int i = 0; i < 0x28; i++)
+        {
+            var sprite = new OAMEntry(OAM.AsSpan(i*4,4));
+
+            //if (sprite.x == 0)
+            //    continue;
+
+            if (sprite.y <= y + 16 && sprite.y + height > y + 16)
+            {
+                spritesOnLine.Add(sprite);
+
+                if (spritesOnLine.Count > 9)
+                    break;
+            }
+        }
+
+        spritesOnLine = spritesOnLine.OrderBy((e) => e.x).ToList();
     }
 
     private void DrawClock()
@@ -468,14 +663,22 @@ internal class PPU
         Color.FromArgb(255,  12,  59,  30),
     };
 
-    internal Color lookupBGPalette(byte c)
+    private static readonly Color[] lighterGreen = new[]
+    {
+        Color.FromArgb(255, 147, 153,   4),
+        Color.FromArgb(255,  77, 125,  44),
+        Color.FromArgb(255,  41,  99,  65),
+        Color.FromArgb(255,  12,  59,  30),
+    };
+
+    internal Color rgbLookup(byte c)
     {
         return c switch
         {
-            0 => blackAndWhite[0],
-            1 => blackAndWhite[1],
-            2 => blackAndWhite[2],
-            3 => blackAndWhite[3],
+            0 => highContrastGreen[0],
+            1 => highContrastGreen[1],
+            2 => highContrastGreen[2],
+            3 => highContrastGreen[3],
 
             _ => Color.DodgerBlue,
         };

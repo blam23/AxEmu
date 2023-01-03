@@ -9,7 +9,7 @@ internal class MemoryBus
     // Memory chips
     internal byte[] VRAM = new byte[0x2000]; // 8KB Video RAM
     internal byte[] WRAM = new byte[0x2000]; // 8KB Work  RAM
-    internal byte[] HRAM = new byte[0x0100]; // High Ram + I/O Registers
+    internal byte[] HRAM = new byte[0x007F]; // High Ram
     internal byte[]  OAM = new byte[0x00A0]; // Object Attribute Memory
 
     private readonly Action<Emulator, byte>[] io_writers = new Action<Emulator, byte>[0x100];
@@ -90,10 +90,19 @@ internal class MemoryBus
         this.system = system;
 
         RegisterStaticIOMethods();
+
+        //Random rng = new Random(123);
+        //for(var i = 0; i < WRAM.Length; i++)
+        //{
+        //    WRAM[i] = (byte)(rng.Next() % 0xFF);
+        //}
     }
 
     public void Write(ushort addr, byte data)
     {
+        //if (addr == 0xDEFE)
+        //    Console.WriteLine($"$DEFE <-- {data:X2}");
+
         // ROM
         if (addr < 0x8000)
             return;
@@ -117,6 +126,8 @@ internal class MemoryBus
         }
         else if (addr < 0xFF00) // Unusable memory
             return;
+        else if (addr >= 0xFF80 && addr < 0xFFFF)
+            HRAM[addr - 0xFF80] = data;
         else
         {
             var action = io_writers[addr - 0xFF00];
@@ -124,7 +135,7 @@ internal class MemoryBus
             if (action != null)
                 action(system, data);
             else
-                HRAM[addr - 0xFF00] = data;
+                Console.WriteLine($"Unsupported write to: ${addr:X4}->{data:X2}"); //HRAM[addr - 0xFF00] = data;
         }
     }
 
@@ -165,14 +176,17 @@ internal class MemoryBus
 
         // Unusable memory
         if (addr < 0xFF00)
-            return 0;
+            return 0xFF;
 
         var action = io_readers[addr - 0xFF00];
 
         if (action != null)
             return action(system);
 
-        return HRAM[addr - 0xFF00];
+        if (addr >= 0xFF80 && addr < 0xFFFE)
+            return HRAM[addr - 0xFF80];
+
+        return 0xFF;
     }
 
     public ushort ReadWord(ushort addr)

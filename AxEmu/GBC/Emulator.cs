@@ -9,11 +9,14 @@ public class Emulator : IEmulator
     public int CyclesPerFrame => PPU.OneFrameInDots;
     public double FramesPerSecond => 59.7;
 
-    public IController Controller1 => throw new NotImplementedException();
+    private JoyPad jp1;
+    public IController Controller1 => jp1;
     public IController Controller2 => throw new NotImplementedException();
 
     public event FrameEvent? FrameCompleted;
     protected virtual void OnFrameCompleted(byte[] bitmap) => FrameCompleted?.Invoke(bitmap);
+
+    public bool CpuRanLastClock => !cpu.halted && !cpu.stopped;
 
     // Components
     internal CPU cpu;
@@ -21,6 +24,7 @@ public class Emulator : IEmulator
     internal DMA dma;
     internal MemoryBus bus;
     internal Cart cart;
+    internal GBTimer timer;
     public Debugger debug;
 
     // Data
@@ -34,6 +38,8 @@ public class Emulator : IEmulator
         cpu   = new(bus);
         ppu   = new(this);
         dma   = new(bus);
+        timer = new(this);
+        jp1   = new(this);
 
         if (bootROMFile != null)
             LoadBootROM(bootROMFile);
@@ -50,11 +56,16 @@ public class Emulator : IEmulator
     public void Clock()
     {
         cpu.Clock();
-        dma.Clock();
 
-        for(var i = 0; i < cpu.CyclesLastClock; i+= 4) 
+        if (!cpu.stopped)
         {
-            ppu.Clock();
+            dma.Clock();
+
+            for (var i = 0; i < cpu.CyclesLastClock; i += 4)
+            {
+                ppu.Clock();
+                timer.Clock();
+            }
         }
     }
 

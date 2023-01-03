@@ -22,13 +22,15 @@ else if (runGBC)
     gbc = new AxEmu.GBC.Emulator();
     emu = gbc;
 
-    //gbc.LoadROM("D:\\Test\\GBC\\tetris.gb");
-    //gbc.LoadROM(@"D:\Test\GBC\game-boy-test-roms-v5.1\little-things-gb\firstwhite.gb");
-    //gbc.LoadROM(@"D:\Test\GBC\game-boy-test-roms-v5.1\mooneye-test-suite\acceptance\instr\daa.gb");
+    gbc.LoadROM(@"D:\Test\GBC\pokeblue.gb");
+    //gbc.LoadROM(@"D:\Test\GBC\tetris.gb");
+    //gbc.LoadROM(@"D:\Test\GBC\game-boy-test-roms-v5.1\bully\bully.gb");
+    //gbc.LoadROM(@"D:\Test\GBC\game-boy-test-roms-v5.1\blargg\cpu_instrs\cpu_instrs.gb");
+    //gbc.LoadROM(@"D:\Test\GBC\game-boy-test-roms-v5.1\blargg\cpu_instrs\individual\03-op sp,hl.gb");
+    //gbc.LoadROM(@"D:\Test\GBC\game-boy-test-roms-v5.1\blargg\instr_timing\instr_timing.gb");
     //gbc.LoadROM(@"D:\Test\GBC\game-boy-test-roms-v5.1\dmg-acid2\dmg-acid2.gb");
-    gbc.LoadROM("D:\\Test\\GBC\\drmario.gb");
+    //gbc.LoadROM("D:\\Test\\GBC\\drmario.gb");
 }
-
 else
 {
     throw new Exception("No Emulator selected");
@@ -55,7 +57,7 @@ var dispThread = new Thread(() =>
     {
         for (var i = 0; i < emu.CyclesPerFrame; i++)
         {
-            if (printCPU && gbc is not null)
+            if (printCPU && gbc is not null && gbc.CpuRanLastClock)
                 Console.WriteLine(gbc.debug.CPUStatus());
 
             emu.Clock();

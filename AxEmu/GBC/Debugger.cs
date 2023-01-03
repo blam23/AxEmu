@@ -127,7 +127,7 @@ public class Debugger
 
         var onTile = tileNum == system.ppu.dbgCurrentTile;
 
-        Func<byte, Color> lookup = onTile ? lookupDbgPalette : system.ppu.lookupBGPalette;
+        Func<byte, Color> lookup = onTile ? lookupDbgPalette : system.ppu.rgbLookup;
 
         for (int ty = 0; ty < 16; ty+= 2)
         {
@@ -162,6 +162,24 @@ public class Debugger
     }
 
     public byte[] RenderTileMap()
+    {
+        var bitmap = new byte[24 * 16 * 9 * 9 * 3];
+        var offset = 0x8000;
+        var tile = 0;
+
+        for (byte tileY = 0; tileY < 24; tileY++)
+        {
+            for (byte tileX = 0; tileX < 16; tileX++)
+            {
+                RenderTile(bitmap, offset, tile, tileX, tileY);
+                tile++;
+            }
+        }
+
+        return bitmap;
+    }
+
+    public byte[] RenderOAMData()
     {
         var bitmap = new byte[24 * 16 * 9 * 9 * 3];
         var offset = 0x8000;

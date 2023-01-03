@@ -7,8 +7,9 @@ Emulator gbc = new();
 //
 // TODO: Load from cmd line
 //gbc.LoadROM("D:\\Test\\GBC\\tetris.gb");
-gbc.LoadROM(@"D:\Test\GBC\game-boy-test-roms-v5.1\blargg\cpu_instrs\individual\03-op sp,hl.gb");
-//gbc.LoadROM(@"D:\Test\GBC\game-boy-test-roms-v5.1\blargg\cpu_instrs\individual\07-jr,jp,call,ret,rst.gb");
+//gbc.LoadROM(@"D:\Test\GBC\game-boy-test-roms-v5.1\blargg\cpu_instrs\individual\04-op r,imm.gb");
+gbc.LoadROM(@"D:\Test\GBC\game-boy-test-roms-v5.1\blargg\cpu_instrs\individual\02-interrupts.gb");
+//gbc.LoadROM("D:\\Test\\GBC\\drmario.gb");
 
 var readKey = false;
 var printCpu = false;
@@ -30,7 +31,7 @@ while (true)
 {
     logWriter?.Write(gbc.debug.CPUStatusGBDoctor() + "\n");
 
-    if (printCpu)
+    if (printCpu && gbc.CpuRanLastClock)
         Console.WriteLine(gbc.debug.CPUStatus());
 
     if (readKey)
