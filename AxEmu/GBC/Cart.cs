@@ -1,10 +1,37 @@
-﻿using System.Text;
+﻿using AxEmu.GBC.MBC;
+using System.Reflection;
+using System.Text;
 
 namespace AxEmu.GBC;
 
-
 internal class Cart
 {
+    static Cart()
+    {
+        LoadMBCs();
+    }
+
+    private static Dictionary<byte, Type> mbcs = new();
+    public static void LoadMBCs()
+    {
+        foreach (var type in Assembly.GetExecutingAssembly().GetTypes())
+        {
+            var attrs = type.GetCustomAttributes(typeof(MBCAttribute), true);
+            foreach (var a in attrs)
+            {
+                if (a is MBCAttribute mbc)
+                {
+                    var num = mbc.CartType;
+
+                    if (mbcs.ContainsKey(num))
+                        throw new InvalidDataException($"Duplicate MBC registered for number: 0x{num:X2}");
+
+                    mbcs.Add(num, type);
+                }
+            }
+        }
+    }
+
     public enum State
     {
         Unloaded,
@@ -14,7 +41,7 @@ internal class Cart
     }
 
     internal readonly byte[] rom = Array.Empty<byte>();
-    internal readonly byte[] ram = new byte[0x2000];
+    internal byte[] ram;
     private readonly State state = State.Unloaded;
     public State LoadState => state;
 
@@ -23,6 +50,24 @@ internal class Cart
     public byte CartType = 0;
     public byte ROMSize  = 0;
     public byte RAMSize  = 0;
+
+    public string saveFile = "";
+
+    public IMBC CreateMBC()
+    {
+        if (mbcs.TryGetValue(CartType, out var mbcType))
+        {
+            if (Activator.CreateInstance(mbcType) is IMBC mbc)
+            {
+                mbc.CartType = CartType;
+                return mbc;
+            }
+
+            throw new Exception($"MBC '0x{CartType:X2}' is invalid!");
+        }
+
+        throw new Exception($"Cart type: '0x{CartType:X2}' not loaded (likely not supported).");
+    }
 
     private string GetNullStr(ReadOnlySpan<byte> data)
     {
@@ -66,7 +111,9 @@ internal class Cart
         RAMSize  = data[0x0149];
 
         // CGB flag can be either 0x80 or 0xC0, bit 6 is ignored.
-        CGB = (data[0x0143] | 0x40) == 0xC0; 
+        CGB = (data[0x0143] | 0x40) == 0xC0;
+
+        ram = new byte[GetRAMinKB() * 0x400];
 
         Console.WriteLine($"Title:    '{title}'");
         Console.WriteLine($"CGB Game: {(CGB ? 'T' : 'F')}");
@@ -77,11 +124,11 @@ internal class Cart
 
         return true;
     }
-
-    public Cart(string FileLocation) 
+    public Cart(string FileLocation)
     {
         try
         {
+            saveFile = FileLocation + ".axsav";
             rom = File.ReadAllBytes(FileLocation);
         }
         catch
@@ -101,5 +148,25 @@ internal class Cart
 
     public Cart()
     {
+    }
+
+    //
+    // Saving
+    //
+    internal void LoadRAM()
+    {
+        if (!File.Exists(saveFile))
+            return;
+
+        using var fs = File.OpenRead(saveFile);
+        fs.Read(ram, 0, (int)fs.Length);
+    }
+
+    internal void SaveRAM()
+    {
+        using var fs = File.Create(saveFile);
+        fs.Write(ram);
+        fs.Flush();
+        fs.Close();
     }
 }

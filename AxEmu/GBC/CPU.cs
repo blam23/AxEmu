@@ -81,7 +81,7 @@ internal partial class CPU
         set { H = Byte.upper(value); L = Byte.lower(value); }
     }
 
-    bool IME    = false;
+    internal bool IME = true;
     internal bool halted = false;
 
     //
@@ -90,7 +90,8 @@ internal partial class CPU
 
     [IO(Address = 0xFFFF)] public byte IE { get; set; } = 0;
 
-    [IO(Address = 0xFF0F)] public byte IF { get; set; } = 0;
+    private byte _if = 0;
+    [IO(Address = 0xFF0F)] public byte IF { get { return (byte)(_if | 0xE0); } set { _if = value; } }
 
     internal enum Interrupt
     {
@@ -122,38 +123,49 @@ internal partial class CPU
         halted = false;
         CyclesLastClock += 5;
 
-        PushWord(PC);
+        // Manually push word becuase of stupid logic edge case:
+        // -> If the pushing of the *upper* byte of PC blanked out our IE bits, jump to $0000
+        var ie = IE;
+        PushByte(Byte.upper(PC));
+
+        if (ie != IE)
+            ie = IE;
+
+        PushByte(Byte.lower(PC));
 
         // Only service the first enabled interrupt
-        var eif = IF & IE;
+        var eif = _if & ie;
 
-        if (eif == 0)
-            throw new InvalidOperationException();
-        
+        if (eif == 0x0000)
+        {
+            PC = 0x00;
+            return;
+        }
+
         if ((eif & 0x01) == 0x01)
         {
             IF &= 0xFE; // Clear bit
-            PC  = 0x40; // Goto VBlank handler
+            PC = 0x40; // Goto VBlank handler
         }
         else if ((eif & 0x02) == 0x02)
         {
             IF &= 0xFD; // Clear bit
-            PC  = 0x48; // Goto Stat handler
+            PC = 0x48; // Goto Stat handler
         }
         else if ((eif & 0x04) == 0x04)
         {
             IF &= 0xFB; // Clear bit
-            PC  = 0x50; // Goto Timer handler
+            PC = 0x50; // Goto Timer handler
         }
         else if ((eif & 0x08) == 0x08)
         {
             IF &= 0xF7; // Clear bit
-            PC  = 0x58; // Goto Serial handler
+            PC = 0x58; // Goto Serial handler
         }
         else if ((eif & 0x10) == 0x10)
         {
             IF &= 0xEF; // Clear bit
-            PC  = 0x60; // Goto Joypad handler
+            PC = 0x60; // Goto Joypad handler
         }
     }
 
@@ -172,7 +184,10 @@ internal partial class CPU
         // Reset state
         jumped = false;
 
-        if(IME && (IF & IE) > 0)
+        if (halted && (_if & IE) > 0)
+            halted = false;
+
+        if (IME && (_if & IE) > 0)
         {
             ServiceInterrupt();
         }
@@ -301,11 +316,11 @@ internal partial class CPU
         return current.Input switch
         {
             Data.Abs => Abs(),
-            Data.BC  => BC,
-            Data.DE  => DE,
-            Data.HL  => HL,
-            Data.AF  => AF,
-            Data.SP  => SP,
+            Data.BC => BC,
+            Data.DE => DE,
+            Data.HL => HL,
+            Data.AF => AF,
+            Data.SP => SP,
 
             Data.SP_Plus_Imm => GetSPWithImmOffsetAndSetFlags(),
 
@@ -330,7 +345,7 @@ internal partial class CPU
 
             case Data.Ind_Abs: bus.Write(Abs(), val); break;
             case Data.Ind_Imm: bus.Write(Byte.combine(0xFF, Imm()), val); break;
-            case Data.Ind_C:  bus.Write(Byte.combine(0xFF, C), val); break;
+            case Data.Ind_C: bus.Write(Byte.combine(0xFF, C), val); break;
             case Data.Ind_BC: bus.Write(BC, val); break;
             case Data.Ind_DE: bus.Write(DE, val); break;
             case Data.Ind_HL: bus.Write(HL, val); break;
@@ -372,9 +387,9 @@ internal partial class CPU
             || current.Input == Data.BC
             || current.Input == Data.DE
             || current.Input == Data.HL
-            && current.Output == Data.Ind_Abs) 
+            && current.Output == Data.Ind_Abs)
         {
-            WriteWord(InWord()); 
+            WriteWord(InWord());
             return;
         }
 
@@ -392,10 +407,10 @@ internal partial class CPU
             case Data.L:
             case Data.Ind_Abs:
             case Data.Ind_Imm:
-            case Data.Ind_C:  
-            case Data.Ind_BC: 
-            case Data.Ind_DE: 
-            case Data.Ind_HL: 
+            case Data.Ind_C:
+            case Data.Ind_BC:
+            case Data.Ind_DE:
+            case Data.Ind_HL:
             case Data.Inc_HL:
             case Data.Dec_HL:
             case Data.Imm:
@@ -420,10 +435,10 @@ internal partial class CPU
         return current.Condition switch
         {
             Conditional.Always => true,
-            Conditional.Z      => flags.Z,
-            Conditional.NZ     => !flags.Z,
-            Conditional.C      => flags.C,
-            Conditional.NC     => !flags.C,
+            Conditional.Z => flags.Z,
+            Conditional.NZ => !flags.Z,
+            Conditional.C => flags.C,
+            Conditional.NC => !flags.C,
 
             _ => throw new InvalidOperationException(),
         };
@@ -737,9 +752,9 @@ internal partial class CPU
             _ => throw new InvalidOperationException(),
         };
 
-        bool u16 = current.Input == Data.BC 
-            || current.Input == Data.DE 
-            || current.Input == Data.HL 
+        bool u16 = current.Input == Data.BC
+            || current.Input == Data.DE
+            || current.Input == Data.HL
             || current.Input == Data.SP;
 
         // Don't set flags for u16 ops
@@ -749,7 +764,7 @@ internal partial class CPU
         flags.Z = result == 0;
         flags.N = true;
 
-        flags.H = ((((result+1) & 0xF) - 1) & 0x10) == 0x10;
+        flags.H = ((((result + 1) & 0xF) - 1) & 0x10) == 0x10;
     }
 
     private void IncImpl()
@@ -794,7 +809,6 @@ internal partial class CPU
         flags.N = false;
 
         flags.H = ((((result - 1) & 0xF) + 1) & 0x10) == 0x10;
-        //flags.H = (((result-1) & 0xF) + (1 & 0xF)) > 0xF;
     }
 
     private void RrImpl(bool carry, bool keepHighBitHigh, bool moveHighToLow)
@@ -879,7 +893,7 @@ internal partial class CPU
             0xDF => 0x18,
             0xEF => 0x28,
             0xFF => 0x38,
-            
+
             _ => throw new InvalidOperationException(),
         };
 

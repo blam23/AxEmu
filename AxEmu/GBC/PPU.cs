@@ -1,4 +1,5 @@
-﻿using System.Drawing;
+﻿using System.Diagnostics;
+using System.Drawing;
 using static AxEmu.GBC.CPU;
 
 namespace AxEmu.GBC;
@@ -10,7 +11,7 @@ internal struct OAMEntry
     public byte tile;
 
     public byte palette;
-    public bool dmaP;
+    public byte dmaP;
     public bool vramBank;
     public bool flipX;
     public bool flipY;
@@ -25,7 +26,7 @@ internal struct OAMEntry
         var flags = data[3];
         palette   = (byte)(flags & 0x7);
         vramBank  = Byte.get(flags, 3);
-        dmaP      = Byte.get(flags, 4);
+        dmaP      = Byte.get(flags, 4) ? (byte)1 : (byte)0;
         flipX     = Byte.get(flags, 5);
         flipY     = Byte.get(flags, 6);
         bgPrio    = Byte.get(flags, 7);
@@ -52,19 +53,20 @@ internal class FIFO
 
     private Queue<Color> fifo = new();
 
-    internal int pushedX;
-    private int fetchX;
-    private int mapX;
-    private int mapY;
-    private int tileY;
-    private int lineX;
-    private int fifoX;
+    internal byte pushedX;
+    private byte fetchX;
+    private byte mapX;
+    private byte mapY;
+    private byte tileY;
+    private byte lineX;
+    private byte fifoX;
 
     private Mode mode;
 
     internal byte currentTile;
     private byte tileHi;
     private byte tileLo;
+    private bool inWindow = false;
 
     private byte[] fetchData = new byte[3];
 
@@ -72,6 +74,11 @@ internal class FIFO
     private List<byte> spriteData = new();
 
     Random rng = new Random();
+
+    private void adjustTile()
+    {
+        currentTile += 128;
+    }
 
     private void getTile()
     {
@@ -82,7 +89,7 @@ internal class FIFO
         currentTile = ppu.bus.Read(addr);
 
         if (!Byte.get(ppu.LCDC, 4))
-            currentTile += 128;
+            adjustTile();
     }
 
     private void getWindow()
@@ -90,8 +97,8 @@ internal class FIFO
         var wy = ppu.WY;
         var wx = ppu.WX;
 
-        if (fetchX + 7 >= wx && fetchX+7 < wx + PPU.RenderHeight + 14
-            && ppu.LY >= wy && ppu.LY < wy + PPU.RenderWidth)
+        if (fetchX + 7 >= wx && fetchX+7 < wx + PPU.RenderWidth + 14
+            && ppu.LY >= wy && ppu.LY < wy + PPU.RenderHeight)
         {
             var ty = ppu.windowLine / 8;
 
@@ -100,7 +107,9 @@ internal class FIFO
             currentTile = ppu.bus.Read(addr);
 
             if (!Byte.get(ppu.LCDC, 4))
-                currentTile += 128;
+                adjustTile();
+
+            inWindow = true;
         }
     }
 
@@ -180,10 +189,7 @@ internal class FIFO
             if (ppu.dbgSlowMode)
             {
                 ppu.OnFrameCompleted();
-
-                //Thread.Sleep(1);
             }
-
         }
 
         lineX++;
@@ -195,7 +201,9 @@ internal class FIFO
         if (fifo.Count > 8)
             return false;
 
-        var x = fetchX - (8 - (ppu.SCX % 8));
+        var x = inWindow
+            ? fetchX - (8 - (ppu.SCX % 8))
+            : fetchX;
 
         for (var i = 0; i < 8; i++)
         {
@@ -243,8 +251,8 @@ internal class FIFO
 
             var sbit = sprite.flipX ? offset : (7 - offset);
 
-            byte hi = (byte)(Byte.get(spriteData[i * 2], sbit)       ? 1 : 0);//(byte)((spriteData[i * 2] & (1 << bit)) >> bit);
-            byte lo = (byte)(Byte.get(spriteData[(i * 2) + 1], sbit) ? 1 : 0);//(byte)((spriteData[(i * 2) + 1] & (1 << bit)) >> bit);
+            byte lo = (byte)(Byte.get(spriteData[i * 2], sbit)       ? 1 : 0);//(byte)((spriteData[i * 2] & (1 << bit)) >> bit);
+            byte hi = (byte)(Byte.get(spriteData[(i * 2) + 1], sbit) ? 1 : 0);//(byte)((spriteData[(i * 2) + 1] & (1 << bit)) >> bit);
             var idx = hi << 1 | lo;
 
             // transparent
@@ -253,7 +261,7 @@ internal class FIFO
 
             if (!sprite.bgPrio || bgColour == 0)
             {
-                return (true, (byte)idx);// sprite.dmaP ? ppu.sp1Palette[idx] : ppu.sp2Palette[idx]);
+                return (true, ppu.paletteOAM[sprite.dmaP][idx]);
             }
         }
 
@@ -270,6 +278,7 @@ internal class FIFO
 
                 sprites.Clear();
                 spriteData.Clear();
+                inWindow = false;
 
                 if (Byte.get(ppu.LCDC, 0))
                     getTile();
@@ -325,11 +334,11 @@ internal class FIFO
 
     public void Clock()
     {
-        mapX = fetchX + ppu.SCX;
-        mapY = ppu.LY + ppu.SCY;
-        tileY = (mapY % 8) * 2;
+        mapX = (byte)(fetchX + ppu.SCX);
+        mapY = (byte)(ppu.LY + ppu.SCY);
+        tileY = (byte)((mapY % 8) * 2);
 
-        if ((ppu.lineDot & 1) == 0)
+        if ((ppu.lineDot % 2) == 0)
         {
             fetch();
         }
@@ -394,6 +403,9 @@ internal class PPU
         if (OAMInterrupt)       ret |= 0x20;
         if (LYCompareInterrupt) ret |= 0x40;
 
+        // Always set
+        ret |= 0x80;
+
         return ret;
     }
 
@@ -407,8 +419,7 @@ internal class PPU
 
     
     internal byte[] dmgPalette = new byte[] { 0, 1, 2, 3 };
-    internal byte[] sp1Palette = new byte[] { 0, 1, 2, 3 };
-    internal byte[] sp2Palette = new byte[] { 0, 1, 2, 3 };
+    internal byte[][] paletteOAM = new byte[][] { new byte[] { 0, 1, 2, 3 }, new byte[] { 0, 1, 2, 3 } };
     private void setBGPalette(byte value)
     {
         dmgPalette[3] = (byte)((value & 0xC0) >> 6);
@@ -419,20 +430,10 @@ internal class PPU
 
     private void setOAMPalette(int palette, byte value)
     {
-        if (palette == 1)
-        {
-            sp1Palette[3] = (byte)((value & 0xC0) >> 6);
-            sp1Palette[2] = (byte)((value & 0x30) >> 4);
-            sp1Palette[1] = (byte)((value & 0x0C) >> 2);
-            sp1Palette[0] = 0;
-        }
-        else
-        {
-            sp2Palette[3] = (byte)((value & 0xC0) >> 6);
-            sp2Palette[2] = (byte)((value & 0x30) >> 4);
-            sp2Palette[1] = (byte)((value & 0x0C) >> 2);
-            sp2Palette[0] = 0;
-        }
+        paletteOAM[palette][3] = (byte)((value & 0xC0) >> 6);
+        paletteOAM[palette][2] = (byte)((value & 0x30) >> 4);
+        paletteOAM[palette][1] = (byte)((value & 0x0C) >> 2);
+        paletteOAM[palette][0] = (byte)(value & 0x03);
     }
 
     [IO(Address = 0xFF41, Type=IOType.Read)]
@@ -445,10 +446,10 @@ internal class PPU
     public static void SetBGPalette(Emulator system, byte value) => system.ppu.setBGPalette(value);
 
     [IO(Address = 0xFF48, Type = IOType.Write)]
-    public static void SetOAMPalette1(Emulator system, byte value) => system.ppu.setOAMPalette(1, value);
+    public static void SetOAMPalette1(Emulator system, byte value) => system.ppu.setOAMPalette(0, value);
 
     [IO(Address = 0xFF49, Type = IOType.Write)]
-    public static void SetOAMPalette2(Emulator system, byte value) => system.ppu.setOAMPalette(2, value);
+    public static void SetOAMPalette2(Emulator system, byte value) => system.ppu.setOAMPalette(1, value);
 
     #endregion
 
@@ -479,7 +480,7 @@ internal class PPU
     internal int lineDot = 0;
     internal int scanline = 0;
 
-    internal bool showWindow => Byte.get(LCDC, 5) && WX >= 0 && WX <= RenderHeight && WY >= 0 && WY <= RenderWidth;
+    internal bool showWindow => Byte.get(LCDC, 5) && WX >= 0 && WX <= RenderWidth && WY >= 0 && WY <= RenderHeight;
     internal int windowLine = 0;
 
     internal int x = 0;
@@ -496,6 +497,8 @@ internal class PPU
         bus.RegisterIOProperties(GetType(), this);
 
         fifo = new FIFO(this);
+
+        frameTimer.Start();
     }
 
     private void ChangeMode(Mode mode)
@@ -513,15 +516,14 @@ internal class PPU
 
     private void NextLine()
     {
-        if (showWindow && LY >= WY && LY < WY + RenderHeight)
+        if (showWindow && LY >= WY)
             windowLine++;
 
         LY++;
 
         if (LY == LYC && LYCompareInterrupt)
         {
-            if (LYCompareInterrupt) { system.cpu.RequestInterrupt(Interrupt.Stat); }
-            // TODO: Interrupt
+            if (LYCompareInterrupt) { system.cpu.RequestInterrupt(Interrupt.Stat); Console.WriteLine($"LYC interrupt on line {LY}"); }
         }
 
         lineDot = 0;
@@ -540,6 +542,8 @@ internal class PPU
         }
     }
 
+    Stopwatch frameTimer = new Stopwatch();
+
     private void VBlankClock()
     {
         if (lineDot >= DotsPerLine)
@@ -549,10 +553,19 @@ internal class PPU
 
             if (LY >= LinesPerFrame)
             {
+                if (system.LimitFrames)
+                {
+                    var elapsed = frameTimer.ElapsedMilliseconds;
+                    if (elapsed < 13)
+                    {
+                        Thread.Sleep((int)(13 - elapsed));
+                    }
+                }
+
                 OnFrameCompleted();
 
                 if (dot != OneFrameInDots)
-                    Console.WriteLine("Invalid dots in frame: {dot}.");
+                    Console.WriteLine($"Invalid dots in frame: {dot}.");
 
                 ChangeMode(Mode.OAMScan);
                 LY = 0;
@@ -560,6 +573,7 @@ internal class PPU
                 lineDot = 0;
                 windowLine = 0;
                 fifo.Reset();
+                frameTimer.Restart();
             }
         }
     }
@@ -591,8 +605,8 @@ internal class PPU
         {
             var sprite = new OAMEntry(OAM.AsSpan(i*4,4));
 
-            //if (sprite.x == 0)
-            //    continue;
+            if (sprite.x == 0)
+                continue;
 
             if (sprite.y <= y + 16 && sprite.y + height > y + 16)
             {

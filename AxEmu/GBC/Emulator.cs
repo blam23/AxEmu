@@ -1,6 +1,4 @@
-﻿using System.Drawing;
-
-namespace AxEmu.GBC;
+﻿namespace AxEmu.GBC;
 
 public class Emulator : IEmulator
 {
@@ -17,6 +15,8 @@ public class Emulator : IEmulator
     protected virtual void OnFrameCompleted(byte[] bitmap) => FrameCompleted?.Invoke(bitmap);
 
     public bool CpuRanLastClock => !cpu.halted && !cpu.stopped;
+
+    public bool LimitFrames { get; set; }
 
     // Components
     internal CPU cpu;
@@ -40,7 +40,6 @@ public class Emulator : IEmulator
         dma   = new(bus);
         timer = new(this);
         jp1   = new(this);
-
         if (bootROMFile != null)
             LoadBootROM(bootROMFile);
 
@@ -88,5 +87,21 @@ public class Emulator : IEmulator
 
         if (cart.LoadState != Cart.State.Loaded)
             throw new Exception("Error loading ROM file");
+
+        bus.SetMBC(cart.CreateMBC());
+    }
+
+    public void SetSleep(ISleep sleep) => sleeper = sleep;
+
+    ISleep sleeper = new ThreadSleep();
+    internal void Sleep(int ms)
+    {
+        sleeper.Sleep(ms);
+    }
+
+    public void Shutdown()
+    {
+        // Save any state for battery backed carts, etc.
+        bus.Shutdown();
     }
 }

@@ -1,5 +1,7 @@
 ﻿using AxEmu;
 using AxSDL;
+using static System.Net.Mime.MediaTypeNames;
+using System;
 
 var running = true;
 var runNES = false;
@@ -23,13 +25,14 @@ else if (runGBC)
     emu = gbc;
 
     gbc.LoadROM(@"D:\Test\GBC\pokeblue.gb");
+    //gbc.LoadROM(@"D:\Test\GBC\kirby.gb");
     //gbc.LoadROM(@"D:\Test\GBC\tetris.gb");
     //gbc.LoadROM(@"D:\Test\GBC\game-boy-test-roms-v5.1\bully\bully.gb");
     //gbc.LoadROM(@"D:\Test\GBC\game-boy-test-roms-v5.1\blargg\cpu_instrs\cpu_instrs.gb");
-    //gbc.LoadROM(@"D:\Test\GBC\game-boy-test-roms-v5.1\blargg\cpu_instrs\individual\03-op sp,hl.gb");
+    //gbc.LoadROM(@"D:\Test\GBC\game-boy-test-roms-v5.1\mooneye-test-suite\acceptance\ppu\hblank_ly_scx_timing-GS.gb");
     //gbc.LoadROM(@"D:\Test\GBC\game-boy-test-roms-v5.1\blargg\instr_timing\instr_timing.gb");
     //gbc.LoadROM(@"D:\Test\GBC\game-boy-test-roms-v5.1\dmg-acid2\dmg-acid2.gb");
-    //gbc.LoadROM("D:\\Test\\GBC\\drmario.gb");
+    //gbc.LoadROM("D:\\Test\\GBC\\zelda.gb");
 }
 else
 {
@@ -44,9 +47,10 @@ bool printCPU = false;
 if (runGBC && gbc is not null)
 {
     SDLGBCDebug.Init(gbc, display);
-
+    gbc.SetSleep(new SDLSleep());
     display.AddKeyUpCall(Silk.NET.SDL.Scancode.ScancodeF1, (e) => { (e as AxEmu.GBC.Emulator)?.debug.ToggleSlowMode(); });
     display.AddKeyUpCall(Silk.NET.SDL.Scancode.ScancodeF2, (e) => { printCPU = !printCPU; });
+    display.AddKeyUpCall(Silk.NET.SDL.Scancode.ScancodeSpace, (e) => { gbc.LimitFrames = !gbc.LimitFrames; });
 }
 
 var dispThread = new Thread(() =>
@@ -71,10 +75,11 @@ var dispThread = new Thread(() =>
         //sw.Reset();
     }
 });
-dispThread.Start();
 
+dispThread.Start();
 display.Run();
 
 running = false;
+emu.Shutdown();
 
 display.Dispose();

@@ -33,17 +33,14 @@ internal class JoyPad : IController
         var k = (byte)~(byte)key;
         state &= k;
         system.cpu.RequestInterrupt(CPU.Interrupt.Joypad);
-
-        Console.WriteLine($"Press -> State: {state:X2}, keyb: {(byte)key:X2}, k: {k:X2} ({key})");
     }
 
     private void release(Key key)
     {
         state |= (byte)key;
-
-        Console.WriteLine($"Release -> State: {state:X2}");
     }
 
+    private static byte JOYPAlwaysSetMask = 0xC0;
     [IO(Address = 0xFF00)]
     public byte JOYP
     {
@@ -58,7 +55,7 @@ internal class JoyPad : IController
         }
         set
         {
-            select = value;
+            select = (byte)(value | JOYPAlwaysSetMask);
         }
     }
 

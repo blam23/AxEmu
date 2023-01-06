@@ -9,6 +9,8 @@
         int GetScreenWidth();
         int GetScreenHeight();
 
+        void Shutdown();
+
         event FrameEvent? FrameCompleted;
 
         IController Controller1 { get; }

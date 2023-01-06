@@ -170,8 +170,7 @@ internal partial class CPU
     [Instruction(OPCode = 0x76, Cycles = 4)]
     public void HALT()
     {
-        if (IME)
-            halted = true;
+        halted = true;
     }
 
     [Instruction(OPCode = 0x10, Cycles = 4)]

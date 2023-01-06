@@ -179,5 +179,8 @@ namespace AxEmu.NES
             }
         }
 
+        public void Shutdown()
+        {
+        }
     }
 }

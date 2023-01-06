@@ -9,6 +9,7 @@ public static class Byte
     public static byte and(byte a, byte b) => (byte)(a & b);
     public static bool bit(byte a, byte b) => (a & b) == b;
     public static bool get(byte value, int index) => (value & (1 << index)) != 0;
+    public static bool get(ushort value, int index) => (value & (1 << index)) != 0; // in the Byte class?!?!
 
     public static byte from(bool b, int shift) => (byte)((b ? 1 : 0) << shift);
     public static byte upper(ushort a) => (byte)(a >> 8);

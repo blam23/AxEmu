@@ -6,14 +6,14 @@ Emulator gbc = new();
 // Setup - Modify these
 //
 // TODO: Load from cmd line
-//gbc.LoadROM("D:\\Test\\GBC\\tetris.gb");
+gbc.LoadROM("D:\\Test\\GBC\\pokeblue.gb");
 //gbc.LoadROM(@"D:\Test\GBC\game-boy-test-roms-v5.1\blargg\cpu_instrs\individual\04-op r,imm.gb");
-gbc.LoadROM(@"D:\Test\GBC\game-boy-test-roms-v5.1\blargg\cpu_instrs\individual\02-interrupts.gb");
+//gbc.LoadROM(@"D:\Test\GBC\game-boy-test-roms-v5.1\blargg\cpu_instrs\individual\02-interrupts.gb");
 //gbc.LoadROM("D:\\Test\\GBC\\drmario.gb");
 
 var readKey = false;
-var printCpu = false;
-var gbDoctorLog = true;
+var printCpu = true;
+var gbDoctorLog = false;
 
 //
 // Code
@@ -33,6 +33,9 @@ while (true)
 
     if (printCpu && gbc.CpuRanLastClock)
         Console.WriteLine(gbc.debug.CPUStatus());
+
+    //if (i % 100 == 1)
+    //    Thread.Sleep(1);
 
     if (readKey)
     {

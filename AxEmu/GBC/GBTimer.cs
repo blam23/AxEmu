@@ -28,24 +28,20 @@ internal class GBTimer
     // Timer
     //
     private bool timerEnable = false;
-    private int  timerClocks = 1024;
+    private int  timerClocks = 0x400;
     private byte tct         = 0x00;
 
-    private byte tima;
-    [IO(Address = 0xFF05)]
-    public byte TIMA
-    {
-        get => tima;
-    }
+    [IO(Address = 0xFF05)] public byte TIMA { get; set; } // Counter
+    [IO(Address = 0xFF06)] public byte TMA { get; set; }  // Modulo
 
-    [IO(Address = 0xFF06)] public byte TMA { get; set; }
 
+    private static readonly byte TACAlwaysSetMask = 0xF8;
     [IO(Address = 0xFF07)]
     public byte TAC
     { 
         get
         {
-            return (byte)((timerEnable ? 0x04 : 0x00) + tct);
+            return (byte)(((timerEnable ? 0x04 : 0x00) + tct) | TACAlwaysSetMask);
         }
         set
         {
@@ -54,10 +50,10 @@ internal class GBTimer
 
             timerClocks = tct switch
             {
-                0b00 => 1024,
-                0b01 => 16,
-                0b10 => 64,
-                0b11 => 256,
+                0b00 => 0x400,
+                0b01 => 0x010,
+                0b10 => 0x040,
+                0b11 => 0x100,
 
                 _ => throw new InvalidDataException()
             };
@@ -79,18 +75,16 @@ internal class GBTimer
         {
             if (clock % timerClocks == 0)
             {
-                tima++;
+                TIMA++;
 
-                if (tima == 0x00)
+                if (TIMA == 0x00)
                 {
-                    tima = TMA;
+                    TIMA = TMA;
                     system.cpu.RequestInterrupt(CPU.Interrupt.Timer);
                 }
             }
         }
 
         clock++;
-
-        clock %= 2046;
     }
 }

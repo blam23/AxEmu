@@ -311,4 +311,8 @@ internal unsafe class SDLMain
         GC.SuppressFinalize(this);
     }
 
+    internal static void Sleep(int ms)
+    {
+        SDL.Delay((uint)ms);
+    }
 }

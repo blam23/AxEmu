@@ -1,4 +1,5 @@
-﻿using System.Reflection;
+﻿using AxEmu.GBC.MBC;
+using System.Reflection;
 
 namespace AxEmu.GBC;
 
@@ -14,6 +15,8 @@ internal class MemoryBus
 
     private readonly Action<Emulator, byte>[] io_writers = new Action<Emulator, byte>[0x100];
     private readonly Func<Emulator, byte>[]   io_readers = new Func<Emulator, byte>[0x100];
+
+    private IMBC mbc;
 
     public void RegisterIOProperties(Type caller, object instance)
     {
@@ -91,8 +94,8 @@ internal class MemoryBus
 
         RegisterStaticIOMethods();
 
-        //Random rng = new Random(123);
-        //for(var i = 0; i < WRAM.Length; i++)
+        //Random rng = new(123);
+        //for (var i = 0; i < WRAM.Length; i++)
         //{
         //    WRAM[i] = (byte)(rng.Next() % 0xFF);
         //}
@@ -105,14 +108,14 @@ internal class MemoryBus
 
         // ROM
         if (addr < 0x8000)
-            return;
+            mbc.Write(addr, data);
         else if (addr < 0xA000)
         {
             if (system.ppu.VRAMAccessible())
                 VRAM[addr - 0x8000] = data;
         }
         else if (addr < 0xC000)
-            system.cart.ram[addr - 0xA000] = data;
+            mbc.Write(addr, data);
         else if (addr < 0xE000)
             WRAM[addr - 0xC000] = data;
         else if (addr < 0xFE00) // Echo RAM
@@ -134,22 +137,15 @@ internal class MemoryBus
 
             if (action != null)
                 action(system, data);
-            else
-                Console.WriteLine($"Unsupported write to: ${addr:X4}->{data:X2}"); //HRAM[addr - 0xFF00] = data;
+            //else
+            //    Console.WriteLine($"Unsupported write to: ${addr:X4}->{data:X2}"); //HRAM[addr - 0xFF00] = data;
         }
     }
-
-    Random test = new Random(123);
 
     public byte Read(ushort addr)
     {
         if (addr < 0x8000)
-        {
-            if (addr >= system.cart.rom.Length)
-                return 0;
-
-            return system.cart.rom[addr];
-        }
+            return mbc.Read(addr);
 
         if (addr < 0xA000)
         {
@@ -161,7 +157,7 @@ internal class MemoryBus
         }
 
         if (addr < 0xC000)
-            return system.cart.ram[addr - 0xA000];
+            return mbc.Read(addr);
 
         // TODO: Swappable RAM
         if (addr < 0xE000)
@@ -201,5 +197,16 @@ internal class MemoryBus
     {
         Write(addr,   Byte.lower(val));
         Write(++addr, Byte.upper(val));
+    }
+
+    internal void SetMBC(IMBC mbc)
+    {
+        this.mbc = mbc;
+        mbc.Initialise(system);
+    }
+
+    internal void Shutdown()
+    {
+        mbc.Shutdown();
     }
 }
