@@ -497,8 +497,6 @@ internal class PPU
         bus.RegisterIOProperties(GetType(), this);
 
         fifo = new FIFO(this);
-
-        frameTimer.Start();
     }
 
     private void ChangeMode(Mode mode)
@@ -542,26 +540,14 @@ internal class PPU
         }
     }
 
-    Stopwatch frameTimer = new Stopwatch();
-
     private void VBlankClock()
     {
         if (lineDot >= DotsPerLine)
         {
             NextLine();
 
-
             if (LY >= LinesPerFrame)
             {
-                if (system.LimitFrames)
-                {
-                    var elapsed = frameTimer.ElapsedMilliseconds;
-                    if (elapsed < 13)
-                    {
-                        Thread.Sleep((int)(13 - elapsed));
-                    }
-                }
-
                 OnFrameCompleted();
 
                 if (dot != OneFrameInDots)
@@ -573,7 +559,6 @@ internal class PPU
                 lineDot = 0;
                 windowLine = 0;
                 fifo.Reset();
-                frameTimer.Restart();
             }
         }
     }

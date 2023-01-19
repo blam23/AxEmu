@@ -135,7 +135,7 @@ namespace AxEmu.NES
         }
 
         private ulong clock = 0;
-        public void Clock()
+        public bool Clock()
         {
             // Always clock PPU
             ppu.Clock();
@@ -156,6 +156,8 @@ namespace AxEmu.NES
             }
 
             clock++;
+
+            return false;
         }
 
         public void Run()
@@ -181,6 +183,17 @@ namespace AxEmu.NES
 
         public void Shutdown()
         {
+        }
+
+        // TODO: THIS!
+        public (byte left, byte right) APUState()
+        {
+            return (0, 0);
+        }
+
+        public void SetAudioSampleRate(int sampleRate)
+        {
+            throw new NotImplementedException();
         }
     }
 }

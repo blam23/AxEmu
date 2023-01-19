@@ -88,24 +88,29 @@ internal unsafe class SDLMain
         // TODO: Pull from IEmulator
         var settings = new AudioSpec
         {
-            Freq = 44100,
+            Freq = 22050,
             Format = 0x08, // 8-bit unsigned https://wiki.libsdl.org/SDL2/SDL_AudioFormat
-            Channels = 1,
-            Samples = 512,
+            Channels = 2,
+            Samples = 256,
             Callback = PfnAudioCallback.From(AudioTick),
             Userdata = null
         };
 
         AudioSpec obtained;
         audio = SDL.OpenAudioDevice((byte*)0, 0, &settings, &obtained, 0);
-        //SDL.PauseAudioDevice(audio, 0); // Play audio
+        emulator.SetAudioSampleRate(22050);
+        SDL.PauseAudioDevice(audio, 0); // Play audio
+
+        // 44032
+        var expected = 0;
 
         var frameTimer = new Timer((e) =>
         {
-            window.SetTitle($"FPS: {videoFrames}, APS: {audioFrames}");
+            window.SetTitle($"FPS: {videoFrames}, APS: {audioFrames}, CPS: {clocksPerSecond}");
 
             audioFrames = 0;
             videoFrames = 0;
+            clocksPerSecond = 0;
         });
         frameTimer.Change(0, 1000);
 
@@ -123,11 +128,27 @@ internal unsafe class SDLMain
 
     int audioFrames = 0;
     ulong videoFrames = 0;
-    byte volume = 10;
+    int clocksPerSecond = 0;
+    
+    float volume = 0.2f;
 
     private void AudioTick(void* UserData, byte* buffer, int length)
     {
         audioFrames++;
+
+        var i = 0;
+        while (i < length)
+        {
+            var sampleReady = emulator.Clock();
+
+            if (sampleReady)
+            {
+                var (left, right) = emulator.APUState();
+                buffer[i]     = (byte)(left * volume);
+                buffer[i + 1] = (byte)(right * volume);
+                i += 2;
+            }
+        }
     }
 
     internal static void @throw(Func<int> sdlCall)

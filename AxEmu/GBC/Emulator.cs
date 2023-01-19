@@ -21,6 +21,7 @@ public class Emulator : IEmulator
     // Components
     internal CPU cpu;
     internal PPU ppu;
+    internal APU apu;
     internal DMA dma;
     internal MemoryBus bus;
     internal Cart cart;
@@ -37,6 +38,7 @@ public class Emulator : IEmulator
         bus   = new(this);
         cpu   = new(bus);
         ppu   = new(this);
+        apu   = new(this);
         dma   = new(bus);
         timer = new(this);
         jp1   = new(this);
@@ -52,20 +54,12 @@ public class Emulator : IEmulator
         bootROM = File.ReadAllBytes(bootROMFile);
     }
 
-    public void Clock()
+    public bool Clock()
     {
         cpu.Clock();
-
-        if (!cpu.stopped)
-        {
-            dma.Clock();
-
-            for (var i = 0; i < cpu.CyclesLastClock; i += 4)
-            {
-                ppu.Clock();
-                timer.Clock();
-            }
-        }
+        ppu.Clock();
+        timer.Clock();
+        return apu.Clock();
     }
 
     public void Reset()
@@ -103,5 +97,16 @@ public class Emulator : IEmulator
     {
         // Save any state for battery backed carts, etc.
         bus.Shutdown();
+    }
+
+    //
+    // APU Stuff
+    //
+
+    public void SetAudioSampleRate(int sampleRate) => apu.SetSampleRate(sampleRate);
+
+    public (byte left, byte right) APUState()
+    {
+        return (apu.Left, apu.Right);
     }
 }

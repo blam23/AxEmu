@@ -181,6 +181,12 @@ internal partial class CPU
 
     public void Clock()
     {
+        if (CyclesLastClock > 0)
+        {
+            CyclesLastClock--;
+            return;
+        }
+
         // Reset state
         jumped = false;
 

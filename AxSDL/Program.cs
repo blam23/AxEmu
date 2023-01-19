@@ -24,9 +24,9 @@ else if (runGBC)
     gbc = new AxEmu.GBC.Emulator();
     emu = gbc;
 
-    gbc.LoadROM(@"D:\Test\GBC\pokeblue.gb");
+    //gbc.LoadROM(@"D:\Test\GBC\pokeblue.gb");
     //gbc.LoadROM(@"D:\Test\GBC\kirby.gb");
-    //gbc.LoadROM(@"D:\Test\GBC\tetris.gb");
+    gbc.LoadROM(@"D:\Test\GBC\tetris.gb");
     //gbc.LoadROM(@"D:\Test\GBC\game-boy-test-roms-v5.1\bully\bully.gb");
     //gbc.LoadROM(@"D:\Test\GBC\game-boy-test-roms-v5.1\blargg\cpu_instrs\cpu_instrs.gb");
     //gbc.LoadROM(@"D:\Test\GBC\game-boy-test-roms-v5.1\mooneye-test-suite\acceptance\ppu\hblank_ly_scx_timing-GS.gb");
@@ -50,7 +50,7 @@ if (runGBC && gbc is not null)
     gbc.SetSleep(new SDLSleep());
     display.AddKeyUpCall(Silk.NET.SDL.Scancode.ScancodeF1, (e) => { (e as AxEmu.GBC.Emulator)?.debug.ToggleSlowMode(); });
     display.AddKeyUpCall(Silk.NET.SDL.Scancode.ScancodeF2, (e) => { printCPU = !printCPU; });
-    display.AddKeyUpCall(Silk.NET.SDL.Scancode.ScancodeSpace, (e) => { gbc.LimitFrames = !gbc.LimitFrames; });
+    //display.AddKeyUpCall(Silk.NET.SDL.Scancode.ScancodeSpace, (e) => { gbc.LimitFrames = !gbc.LimitFrames; });
 }
 
 var dispThread = new Thread(() =>
@@ -59,18 +59,18 @@ var dispThread = new Thread(() =>
     //long targetMS = (long)(1000 / emu.FramesPerSecond);
     while (running)
     {
-        for (var i = 0; i < emu.CyclesPerFrame; i++)
-        {
-            if (printCPU && gbc is not null && gbc.CpuRanLastClock)
-                Console.WriteLine(gbc.debug.CPUStatus());
+        //for (var i = 0; i < emu.CyclesPerFrame; i++)
+        //{
+        //    if (printCPU && gbc is not null && gbc.CpuRanLastClock)
+        //        Console.WriteLine(gbc.debug.CPUStatus());
 
-            emu.Clock();
-        }
+        //    emu.Clock();
+        //}
 
 
         //var elapsed = sw.ElapsedMilliseconds;
         //if (elapsed < targetMS)
-        //Thread.Sleep((int)(targetMS - elapsed));
+        Thread.Sleep(100);
 
         //sw.Reset();
     }
